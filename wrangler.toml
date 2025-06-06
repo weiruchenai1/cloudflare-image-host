@@ -1,0 +1,45 @@
+name = "cf-image-hosting-worker"
+main = "workers/src/index.ts"
+compatibility_date = "2023-11-01"
+
+[env.production]
+name = "cf-image-hosting-worker"
+
+[env.development]
+name = "cf-image-hosting-worker-dev"
+
+# KV Namespaces
+[[kv_namespaces]]
+binding = "USERS_KV"
+id = "your-users-kv-namespace-id"
+preview_id = "your-users-kv-preview-id"
+
+[[kv_namespaces]]
+binding = "FILES_KV"
+id = "your-files-kv-namespace-id"
+preview_id = "your-files-kv-preview-id"
+
+[[kv_namespaces]]
+binding = "INVITATIONS_KV"
+id = "your-invitations-kv-namespace-id"
+preview_id = "your-invitations-kv-preview-id"
+
+[[kv_namespaces]]
+binding = "SESSIONS_KV"
+id = "your-sessions-kv-namespace-id"
+preview_id = "your-sessions-kv-preview-id"
+
+# R2 Buckets
+[[r2_buckets]]
+binding = "FILES_BUCKET"
+bucket_name = "cf-image-hosting-files"
+
+# Environment Variables
+[vars]
+JWT_SECRET = "your-jwt-secret-key"
+ADMIN_EMAIL = "admin@example.com"
+CORS_ORIGIN = "http://localhost:3000"
+
+# Production environment variables (set via wrangler secret)
+# wrangler secret put JWT_SECRET
+# wrangler secret put ADMIN_EMAIL

@@ -1,0 +1,56 @@
+{
+  "name": "cf-image-hosting",
+  "version": "1.0.0",
+  "description": "Modern multi-user image hosting system with Cloudflare integration",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "worker:dev": "wrangler dev workers/src/index.ts",
+    "worker:deploy": "wrangler deploy workers/src/index.ts",
+    "worker:build": "tsc --project workers/tsconfig.json",
+    "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+    "type-check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.20.1",
+    "zustand": "^4.4.7",
+    "framer-motion": "^10.16.16",
+    "react-dropzone": "^14.2.3",
+    "react-hook-form": "^7.48.2",
+    "react-query": "^3.39.3",
+    "date-fns": "^2.30.0",
+    "lucide-react": "^0.294.0",
+    "clsx": "^2.0.0",
+    "tailwind-merge": "^2.0.0",
+    "recharts": "^2.8.0",
+    "react-hot-toast": "^2.4.1",
+    "js-cookie": "^3.0.5",
+    "file-saver": "^2.0.5",
+    "jszip": "^3.10.1"
+  },
+  "devDependencies": {
+    "@types/react": "^18.2.37",
+    "@types/react-dom": "^18.2.15",
+    "@types/js-cookie": "^3.0.6",
+    "@types/file-saver": "^2.0.7",
+    "@typescript-eslint/eslint-plugin": "^6.10.0",
+    "@typescript-eslint/parser": "^6.10.0",
+    "@vitejs/plugin-react": "^4.1.1",
+    "autoprefixer": "^10.4.16",
+    "eslint": "^8.53.0",
+    "eslint-plugin-react-hooks": "^4.6.0",
+    "eslint-plugin-react-refresh": "^0.4.4",
+    "postcss": "^8.4.31",
+    "tailwindcss": "^3.3.5",
+    "typescript": "^5.2.2",
+    "vite": "^4.5.0",
+    "wrangler": "^3.15.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

@@ -1,5 +1,5 @@
 {
-  "name": "cf-image-hosting",
+  "name": "cloudflare-image-host",
   "version": "1.0.0",
   "description": "Modern multi-user image hosting system with Cloudflare integration",
   "type": "module",

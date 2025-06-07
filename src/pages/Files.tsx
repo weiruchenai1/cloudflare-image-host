@@ -121,8 +121,8 @@ export default function Files() {
     const field = sortOptions.field as keyof typeof a
     const direction = sortOptions.direction
 
-    let aValue = a[field]
-    let bValue = b[field]
+    let aValue = a[field] || ''
+    let bValue = b[field] || ''
 
     if (typeof aValue === 'string') aValue = aValue.toLowerCase()
     if (typeof bValue === 'string') bValue = bValue.toLowerCase()

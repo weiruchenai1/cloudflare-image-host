@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { useAuthStore } from '@/store/authStore'
 import { useThemeStore } from '@/store/themeStore'
 import { useFileStore } from '@/store/fileStore'
+import { useSystemStatus } from '@/hooks/useSystemStatus'
 import { initializeAuth } from '@/store/authStore'
 import { initializeTheme } from '@/store/themeStore'
 
@@ -20,6 +21,7 @@ import Profile from '@/pages/Profile'
 import Login from '@/pages/Login'
 import Register from '@/pages/Register'
 import SharedFile from '@/pages/SharedFile'
+import SystemSetup from '@/pages/SystemSetup'
 import NotFound from '@/pages/NotFound'
 
 // Components
@@ -74,6 +76,7 @@ function App() {
   const { isLoading, isAuthenticated } = useAuthStore()
   const { config } = useThemeStore()
   const { uploadFiles } = useFileStore()
+  const { status: systemStatus, isLoading: systemLoading } = useSystemStatus()
 
   useEffect(() => {
     // Initialize authentication and theme
@@ -94,7 +97,8 @@ function App() {
     }
   }
 
-  if (isLoading) {
+  // Show loading while checking system status or auth
+  if (isLoading || systemLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary-50 to-primary-100 dark:from-gray-900 dark:to-gray-800">
         <motion.div
@@ -116,6 +120,14 @@ function App() {
       </div>
     )
   }
+
+  // If system is not initialized, show setup page
+  if (systemStatus && !systemStatus.initialized) {
+    console.log('System not initialized, showing setup page')
+    return <SystemSetup />
+  }
+
+  console.log('System status:', systemStatus)
 
   return (
     <ErrorBoundary>
@@ -160,6 +172,9 @@ function App() {
               }
             />
             
+            {/* System Setup Route (public) */}
+            <Route path="/setup" element={<SystemSetup />} />
+
             {/* Shared File Route (public) */}
             <Route path="/share/:shareId" element={<SharedFile />} />
             

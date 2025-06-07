@@ -5,6 +5,7 @@ import { Upload, X, File, Image, Video, FileText, Archive } from 'lucide-react'
 import { useFileStore } from '@/store/fileStore'
 import { cn } from '@/utils/cn'
 import Button from '@/components/UI/Button'
+import toast from 'react-hot-toast'
 
 interface FileUploadProps {
   folderId?: string
@@ -58,14 +59,19 @@ export default function FileUpload({ folderId, onClose }: FileUploadProps) {
   }
 
   const handleUpload = async () => {
-    if (selectedFiles.length === 0) return
+    if (selectedFiles.length === 0) {
+      toast.error('Please select files to upload')
+      return
+    }
 
     try {
       await uploadFiles(selectedFiles, folderId)
       setSelectedFiles([])
+      toast.success(`Successfully uploaded ${selectedFiles.length} file(s)`)
       onClose?.()
-    } catch (error) {
+    } catch (error: any) {
       console.error('Upload failed:', error)
+      toast.error(error.message || 'Upload failed')
     }
   }
 

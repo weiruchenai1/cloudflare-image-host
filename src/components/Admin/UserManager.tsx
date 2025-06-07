@@ -1,13 +1,12 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { 
-  Users, 
-  Search, 
-  Filter, 
-
-  Edit, 
-  Trash2, 
-  Shield, 
+import {
+  Users,
+  Search,
+  Filter,
+  Edit,
+  Trash2,
+  Shield,
   ShieldCheck,
   UserX,
   UserCheck,
@@ -15,13 +14,15 @@ import {
   Calendar,
   Mail,
   Crown,
-  User as UserIcon
+  User as UserIcon,
+  RefreshCw
 } from 'lucide-react'
 import { User } from '@/types'
+import { apiClient, formatFileSize } from '@/utils/api'
 import Button from '@/components/UI/Button'
 import LoadingSpinner from '@/components/UI/LoadingSpinner'
 import { cn } from '@/utils/cn'
-import { formatFileSize } from '@/utils/api'
+import toast from 'react-hot-toast'
 
 interface UserManagerProps {
   className?: string
@@ -30,70 +31,128 @@ interface UserManagerProps {
 export default function UserManager({ className }: UserManagerProps) {
   const [users, setUsers] = useState<User[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [isRefreshing, setIsRefreshing] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [filterRole, setFilterRole] = useState<'all' | 'admin' | 'user' | 'guest'>('all')
   const [filterStatus, setFilterStatus] = useState<'all' | 'active' | 'inactive'>('all')
 
-  // Mock data for demonstration
-  useEffect(() => {
-    const mockUsers: User[] = [
-      {
-        id: '1',
-        email: 'admin@example.com',
-        username: 'admin',
-        passwordHash: 'hashed',
-        role: 'admin',
-        storageQuota: 100 * 1024 * 1024 * 1024, // 100GB
-        storageUsed: 25 * 1024 * 1024 * 1024, // 25GB
-        createdAt: '2024-01-01T00:00:00Z',
-        lastLoginAt: '2024-01-15T10:30:00Z',
-        isActive: true,
-        invitedBy: 'system',
-      },
-      {
-        id: '2',
-        email: 'john@example.com',
-        username: 'john_doe',
-        passwordHash: 'hashed',
-        role: 'user',
-        storageQuota: 5 * 1024 * 1024 * 1024, // 5GB
-        storageUsed: 2.3 * 1024 * 1024 * 1024, // 2.3GB
-        createdAt: '2024-01-05T00:00:00Z',
-        lastLoginAt: '2024-01-14T15:45:00Z',
-        isActive: true,
-        invitedBy: '1',
-      },
-      {
-        id: '3',
-        email: 'jane@example.com',
-        username: 'jane_smith',
-        passwordHash: 'hashed',
-        role: 'user',
-        storageQuota: 5 * 1024 * 1024 * 1024, // 5GB
-        storageUsed: 800 * 1024 * 1024, // 800MB
-        createdAt: '2024-01-10T00:00:00Z',
-        lastLoginAt: '2024-01-13T09:20:00Z',
-        isActive: true,
-        invitedBy: '1',
-      },
-      {
-        id: '4',
-        email: 'guest@example.com',
-        username: 'guest_user',
-        passwordHash: 'hashed',
-        role: 'guest',
-        storageQuota: 1 * 1024 * 1024 * 1024, // 1GB
-        storageUsed: 50 * 1024 * 1024, // 50MB
-        createdAt: '2024-01-12T00:00:00Z',
-        isActive: false,
-        invitedBy: '2',
-      },
-    ]
-    
-    setTimeout(() => {
+  const fetchUsers = async () => {
+    try {
+      setIsLoading(true)
+      const response = await apiClient.get('/admin/users')
+      setUsers(response.data)
+    } catch (error) {
+      console.error('Failed to fetch users:', error)
+      // 使用模拟数据作为后备
+      const mockUsers: User[] = [
+        {
+          id: '1',
+          email: 'admin@example.com',
+          username: 'admin',
+          passwordHash: 'hashed',
+          role: 'admin',
+          storageQuota: 100 * 1024 * 1024 * 1024, // 100GB
+          storageUsed: 25 * 1024 * 1024 * 1024, // 25GB
+          createdAt: '2024-01-01T00:00:00Z',
+          lastLoginAt: '2024-01-15T10:30:00Z',
+          isActive: true,
+          invitedBy: 'system',
+        },
+        {
+          id: '2',
+          email: 'john@example.com',
+          username: 'john_doe',
+          passwordHash: 'hashed',
+          role: 'user',
+          storageQuota: 5 * 1024 * 1024 * 1024, // 5GB
+          storageUsed: 2.3 * 1024 * 1024 * 1024, // 2.3GB
+          createdAt: '2024-01-05T00:00:00Z',
+          lastLoginAt: '2024-01-14T15:45:00Z',
+          isActive: true,
+          invitedBy: '1',
+        },
+        {
+          id: '3',
+          email: 'jane@example.com',
+          username: 'jane_smith',
+          passwordHash: 'hashed',
+          role: 'user',
+          storageQuota: 5 * 1024 * 1024 * 1024, // 5GB
+          storageUsed: 800 * 1024 * 1024, // 800MB
+          createdAt: '2024-01-10T00:00:00Z',
+          lastLoginAt: '2024-01-13T09:20:00Z',
+          isActive: true,
+          invitedBy: '1',
+        },
+        {
+          id: '4',
+          email: 'guest@example.com',
+          username: 'guest_user',
+          passwordHash: 'hashed',
+          role: 'guest',
+          storageQuota: 1 * 1024 * 1024 * 1024, // 1GB
+          storageUsed: 50 * 1024 * 1024, // 50MB
+          createdAt: '2024-01-12T00:00:00Z',
+          isActive: false,
+          invitedBy: '2',
+        },
+      ]
       setUsers(mockUsers)
+    } finally {
       setIsLoading(false)
-    }, 1000)
+    }
+  }
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true)
+    try {
+      await fetchUsers()
+      toast.success('User list refreshed')
+    } catch (error) {
+      toast.error('Failed to refresh user list')
+    } finally {
+      setIsRefreshing(false)
+    }
+  }
+
+  const handleToggleUserStatus = async (userId: string, currentStatus: boolean) => {
+    try {
+      await apiClient.patch(`/admin/users/${userId}`, { isActive: !currentStatus })
+      setUsers(prev => prev.map(user =>
+        user.id === userId ? { ...user, isActive: !currentStatus } : user
+      ))
+      toast.success(`User ${!currentStatus ? 'activated' : 'deactivated'} successfully`)
+    } catch (error) {
+      toast.error('Failed to update user status')
+    }
+  }
+
+  const handleDeleteUser = async (userId: string, username: string) => {
+    if (confirm(`Are you sure you want to delete user "${username}"? This action cannot be undone.`)) {
+      try {
+        await apiClient.delete(`/admin/users/${userId}`)
+        setUsers(prev => prev.filter(user => user.id !== userId))
+        toast.success('User deleted successfully')
+      } catch (error) {
+        toast.error('Failed to delete user')
+      }
+    }
+  }
+
+  const handleChangeRole = async (userId: string, newRole: string) => {
+    try {
+      await apiClient.patch(`/admin/users/${userId}`, { role: newRole })
+      setUsers(prev => prev.map(user =>
+        user.id === userId ? { ...user, role: newRole as any } : user
+      ))
+      toast.success('User role updated successfully')
+    } catch (error) {
+      toast.error('Failed to update user role')
+    }
+  }
+
+  useEffect(() => {
+    fetchUsers()
   }, [])
 
   const filteredUsers = users.filter(user => {
@@ -168,6 +227,15 @@ export default function UserManager({ className }: UserManagerProps) {
             Manage user accounts and permissions
           </p>
         </div>
+        <Button
+          variant="outline"
+          onClick={handleRefresh}
+          loading={isRefreshing}
+          className="flex items-center gap-2"
+        >
+          <RefreshCw className="w-4 h-4" />
+          Refresh
+        </Button>
       </div>
 
       {/* Stats */}
@@ -359,13 +427,36 @@ export default function UserManager({ className }: UserManagerProps) {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                           <div className="flex items-center justify-end gap-2">
-                            <Button variant="ghost" size="sm">
-                              <Edit className="w-4 h-4" />
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleToggleUserStatus(user.id, user.isActive)}
+                              title={user.isActive ? 'Deactivate user' : 'Activate user'}
+                            >
+                              {user.isActive ? (
+                                <UserX className="w-4 h-4 text-red-500" />
+                              ) : (
+                                <UserCheck className="w-4 h-4 text-green-500" />
+                              )}
                             </Button>
-                            <Button variant="ghost" size="sm">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                const newRole = user.role === 'admin' ? 'user' : 'admin'
+                                handleChangeRole(user.id, newRole)
+                              }}
+                              title={`Make ${user.role === 'admin' ? 'user' : 'admin'}`}
+                            >
                               <ShieldCheck className="w-4 h-4" />
                             </Button>
-                            <Button variant="ghost" size="sm" className="text-red-600 dark:text-red-400">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-red-600 dark:text-red-400"
+                              onClick={() => handleDeleteUser(user.id, user.username)}
+                              title="Delete user"
+                            >
                               <Trash2 className="w-4 h-4" />
                             </Button>
                           </div>

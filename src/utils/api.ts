@@ -10,7 +10,11 @@ async function fetchWithAuth(url: string, options: RequestInit = {}): Promise<Re
   const token = Cookies.get('auth_token')
 
   const headers = new Headers(options.headers)
-  headers.set('Content-Type', 'application/json')
+
+  // Only set Content-Type to application/json if it's not a FormData request
+  if (!(options.body instanceof FormData)) {
+    headers.set('Content-Type', 'application/json')
+  }
 
   if (token) {
     headers.set('Authorization', `Bearer ${token}`)
@@ -91,21 +95,17 @@ class ApiClient {
   async uploadFile(
     url: string,
     file: File,
-    _onProgress?: (progress: number) => void
+    onProgress?: (progress: number) => void,
+    folderId?: string
   ): Promise<ApiResponse> {
     const formData = new FormData()
     formData.append('file', file)
-
-    const token = Cookies.get('auth_token')
-    const headers: Record<string, string> = {}
-
-    if (token) {
-      headers.Authorization = `Bearer ${token}`
+    if (folderId) {
+      formData.append('folderId', folderId)
     }
 
-    const response = await fetch(`${API_BASE_URL}${url}`, {
+    const response = await fetchWithAuth(url, {
       method: 'POST',
-      headers,
       body: formData,
     })
 
@@ -197,6 +197,28 @@ class ApiClient {
   getShareUrl(shareId: string): string {
     return `${API_BASE_URL}/share/${shareId}`
   }
+
+  // Delete file
+  async deleteFile(fileId: string): Promise<ApiResponse<any>> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/files/${fileId}`, {
+      method: 'DELETE',
+    })
+    return response.json()
+  }
+
+  // Rename file
+  async renameFile(fileId: string, name: string): Promise<ApiResponse<any>> {
+    const response = await fetchWithAuth(`${API_BASE_URL}/files/${fileId}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ name }),
+    })
+    return response.json()
+  }
+
+
 }
 
 // Utility functions
@@ -226,6 +248,22 @@ const apiClient = new ApiClient()
 
 ;(apiClient as any).getDownloadUrl = function(fileId: string): string {
   return `${API_BASE_URL}/files/${fileId}/download`
+}
+
+// Simple upload method
+;(apiClient as any).simpleUpload = async function(file: File, folderId?: string): Promise<ApiResponse<any>> {
+  const formData = new FormData()
+  formData.append('file', file)
+  if (folderId) {
+    formData.append('folderId', folderId)
+  }
+
+  const response = await fetchWithAuth('/files/upload', {
+    method: 'POST',
+    body: formData,
+  })
+
+  return response.json()
 }
 
 // Export singleton instance

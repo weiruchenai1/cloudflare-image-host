@@ -1,57 +1,125 @@
-import { motion } from 'framer-motion'
-import { 
-  Upload, 
-  FolderOpen, 
-  Image, 
-  Video, 
-  FileText, 
+import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { motion, AnimatePresence } from 'framer-motion'
+import {
+  Upload,
+  FolderOpen,
+  Image,
+  Video,
+  FileText,
   Archive,
   TrendingUp,
   Users,
-  HardDrive
+  HardDrive,
+  RefreshCw
 } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
+import { useFileStore } from '@/store/fileStore'
+import { apiClient, formatFileSize } from '@/utils/api'
+import { StorageStats } from '@/types'
+import FileUpload from '@/components/FileManager/FileUpload'
+import Button from '@/components/UI/Button'
+import LoadingSpinner from '@/components/UI/LoadingSpinner'
+import toast from 'react-hot-toast'
 
 export default function Dashboard() {
   const { user } = useAuthStore()
+  const navigate = useNavigate()
+  const [stats, setStats] = useState<StorageStats | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [showUpload, setShowUpload] = useState(false)
+  const [isRefreshing, setIsRefreshing] = useState(false)
 
-  const stats = [
+  const fetchDashboardStats = async () => {
+    try {
+      setIsLoading(true)
+      const response = await apiClient.get('/dashboard/stats')
+      setStats(response.data)
+    } catch (error) {
+      console.error('Failed to fetch dashboard stats:', error)
+      // 使用默认数据作为后备
+      setStats({
+        totalUsed: 0,
+        totalQuota: 5 * 1024 * 1024 * 1024, // 5GB
+        fileCount: 0,
+        folderCount: 0,
+        recentUploads: [],
+        storageByType: {},
+        totalFiles: 0,
+        totalSize: 0,
+        filesByType: {},
+        sizeByType: {}
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleRefresh = async () => {
+    setIsRefreshing(true)
+    try {
+      await fetchDashboardStats()
+      toast.success('Dashboard refreshed')
+    } catch (error) {
+      toast.error('Failed to refresh dashboard')
+    } finally {
+      setIsRefreshing(false)
+    }
+  }
+
+  const handleUploadClick = () => {
+    setShowUpload(true)
+  }
+
+  useEffect(() => {
+    fetchDashboardStats()
+  }, [])
+
+  const dashboardStats = stats ? [
     {
       name: 'Total Files',
-      value: '1,234',
+      value: stats.totalFiles.toString(),
       change: '+12%',
       changeType: 'positive',
       icon: FolderOpen,
     },
     {
       name: 'Storage Used',
-      value: '2.4 GB',
+      value: formatFileSize(stats.totalSize),
       change: '+5%',
       changeType: 'positive',
       icon: HardDrive,
     },
     {
-      name: 'Shared Files',
-      value: '89',
+      name: 'File Count',
+      value: stats.fileCount.toString(),
       change: '+23%',
       changeType: 'positive',
       icon: Users,
     },
     {
-      name: 'Bandwidth',
-      value: '12.3 GB',
+      name: 'Storage Quota',
+      value: formatFileSize(stats.totalQuota),
       change: '+8%',
       changeType: 'positive',
       icon: TrendingUp,
     },
-  ]
+  ] : []
 
-  const fileTypes = [
-    { name: 'Images', count: 456, icon: Image, color: 'text-blue-600' },
-    { name: 'Videos', count: 123, icon: Video, color: 'text-purple-600' },
-    { name: 'Documents', count: 234, icon: FileText, color: 'text-green-600' },
-    { name: 'Archives', count: 67, icon: Archive, color: 'text-orange-600' },
-  ]
+  const fileTypes = stats ? Object.entries(stats.filesByType).map(([type, count]) => ({
+    name: type.charAt(0).toUpperCase() + type.slice(1),
+    count: count as number,
+    icon: type === 'image' ? Image : type === 'video' ? Video : type === 'document' ? FileText : Archive,
+    color: type === 'image' ? 'text-green-500' : type === 'video' ? 'text-purple-500' : type === 'document' ? 'text-blue-500' : 'text-orange-500'
+  })) : []
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <LoadingSpinner size="lg" />
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-8">
@@ -71,20 +139,33 @@ export default function Dashboard() {
               Here's what's happening with your files today.
             </p>
           </div>
-          <motion.button
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            className="flex items-center gap-2 bg-primary-600 hover:bg-primary-700 text-white px-6 py-3 rounded-lg font-medium transition-colors duration-200"
-          >
-            <Upload className="w-5 h-5" />
-            Upload Files
-          </motion.button>
+          <div className="flex items-center gap-3">
+            <Button
+              variant="outline"
+              size="md"
+              onClick={handleRefresh}
+              loading={isRefreshing}
+              className="flex items-center gap-2"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Refresh
+            </Button>
+            <Button
+              variant="primary"
+              size="lg"
+              onClick={handleUploadClick}
+              className="flex items-center gap-2"
+            >
+              <Upload className="w-5 h-5" />
+              Upload Files
+            </Button>
+          </div>
         </div>
       </motion.div>
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {stats.map((stat, index) => (
+        {dashboardStats.map((stat, index) => (
           <motion.div
             key={stat.name}
             initial={{ opacity: 0, y: 20 }}
@@ -163,23 +244,40 @@ export default function Dashboard() {
           Recent Activity
         </h2>
         <div className="space-y-4">
-          {[1, 2, 3, 4, 5].map((item) => (
-            <div key={item} className="flex items-center gap-4 p-3 bg-white/50 dark:bg-black/20 rounded-lg">
-              <div className="w-10 h-10 bg-primary-100 dark:bg-primary-900/30 rounded-lg flex items-center justify-center">
-                <Upload className="w-5 h-5 text-primary-600 dark:text-primary-400" />
+          {stats?.recentUploads && stats.recentUploads.length > 0 ? (
+            stats.recentUploads.slice(0, 5).map((file) => (
+              <div key={file.id} className="flex items-center gap-4 p-3 bg-white/50 dark:bg-black/20 rounded-lg">
+                <div className="w-10 h-10 bg-primary-100 dark:bg-primary-900/30 rounded-lg flex items-center justify-center">
+                  <Upload className="w-5 h-5 text-primary-600 dark:text-primary-400" />
+                </div>
+                <div className="flex-1">
+                  <p className="font-medium text-gray-900 dark:text-white">
+                    {file.name}
+                  </p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    {formatFileSize(file.size)} • {new Date(file.createdAt).toLocaleDateString()}
+                  </p>
+                </div>
               </div>
-              <div className="flex-1">
-                <p className="font-medium text-gray-900 dark:text-white">
-                  Uploaded new file
-                </p>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  document-{item}.pdf • 2 hours ago
-                </p>
-              </div>
+            ))
+          ) : (
+            <div className="text-center py-8">
+              <p className="text-gray-500 dark:text-gray-400">
+                No recent uploads
+              </p>
             </div>
-          ))}
+          )}
         </div>
       </motion.div>
+
+      {/* Upload Modal */}
+      <AnimatePresence>
+        {showUpload && (
+          <FileUpload
+            onClose={() => setShowUpload(false)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   )
 }

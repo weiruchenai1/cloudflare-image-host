@@ -621,15 +621,17 @@ class Router {
     this.addRoute('GET', '/auth/me', requireAuth(meHandler), true)
     this.addRoute('POST', '/auth/logout', requireAuth(logoutHandler), true)
 
-    // File routes (placeholder)
-    this.addRoute('GET', '/files', requireAuth(this.placeholderHandler), true)
-    this.addRoute('POST', '/files/upload', requireAuth(this.placeholderHandler), true)
+    // File routes
+    this.addRoute('GET', '/files', requireAuth(this.filesListHandler), true)
+    this.addRoute('POST', '/files/upload', requireAuth(this.fileUploadHandler), true)
     this.addRoute('POST', '/files/folder', requireAuth(this.placeholderHandler), true)
     this.addRoute('DELETE', '/files', requireAuth(this.placeholderHandler), true)
     this.addRoute('PATCH', '/files/move', requireAuth(this.placeholderHandler), true)
     this.addRoute('POST', '/files/:id/share', requireAuth(this.placeholderHandler), true)
-    this.addRoute('GET', '/files/:id/download', this.placeholderHandler)
-    this.addRoute('GET', '/files/:id/thumbnail', this.placeholderHandler)
+    this.addRoute('GET', '/files/:id/download', this.fileDownloadHandler)
+    this.addRoute('GET', '/files/:id/thumbnail', this.fileThumbnailHandler)
+    this.addRoute('DELETE', '/files/:id', this.fileDeleteHandler)
+    this.addRoute('PUT', '/files/:id', this.fileUpdateHandler)
 
     // Share routes (placeholder)
     this.addRoute('GET', '/share/:shareId', this.placeholderHandler)
@@ -641,6 +643,11 @@ class Router {
 
     // Health check
     this.addRoute('GET', '/health', this.healthHandler)
+
+    // System setup endpoints
+    this.addRoute('GET', '/system/status', this.systemStatusHandler)
+    this.addRoute('POST', '/system/setup', this.systemSetupHandler)
+    this.addRoute('POST', '/system/reset', this.systemResetHandler)
   }
 
   addRoute(method, path, handler, requireAuth = false, requireAdmin = false) {
@@ -742,6 +749,401 @@ class Router {
       timestamp: new Date().toISOString(),
       version: '1.0.0',
     })
+  }
+
+  // System status handler - check if system is initialized
+  async systemStatusHandler(request, env, ctx, context) {
+    try {
+      // Check if any admin user exists
+      const adminExists = await checkAdminExists(env)
+
+      return ResponseHelper.success({
+        initialized: adminExists,
+        timestamp: new Date().toISOString(),
+        version: '1.0.0'
+      })
+    } catch (error) {
+      console.error('System status check error:', error)
+      return ResponseHelper.internalServerError('Failed to check system status')
+    }
+  }
+
+  // System setup handler - initialize the system
+  async systemSetupHandler(request, env, ctx, context) {
+    try {
+      // Check if system is already initialized
+      const adminExists = await checkAdminExists(env)
+      if (adminExists) {
+        return ResponseHelper.badRequest('System is already initialized')
+      }
+
+      const body = await request.json()
+      const { adminEmail, adminUsername, adminPassword, invitationCodes } = body
+
+      // Validate input
+      if (!adminEmail || !adminUsername || !adminPassword) {
+        return ResponseHelper.badRequest('Admin email, username, and password are required')
+      }
+
+      // Create admin user
+      const adminId = `admin-${Date.now()}`
+      const adminPasswordHash = await PasswordHelper.hash(adminPassword)
+
+      const adminUser = {
+        id: adminId,
+        email: adminEmail,
+        username: adminUsername,
+        passwordHash: adminPasswordHash,
+        role: 'admin',
+        storageQuota: 100 * 1024 * 1024 * 1024, // 100GB for admin
+        storageUsed: 0,
+        createdAt: new Date().toISOString(),
+        isActive: true
+      }
+
+      // Save admin user
+      await env.USERS_KV.put(`user:${adminId}`, JSON.stringify(adminUser))
+      await env.USERS_KV.put(`user_email:${adminEmail}`, adminId)
+      await env.USERS_KV.put(`user_username:${adminUsername}`, adminId)
+
+      // Mark system as initialized
+      await env.USERS_KV.put('system:initialized', 'true')
+
+      // Create invitation codes
+      const codes = invitationCodes || ['WELCOME', 'INVITE01', 'BETA2025']
+      const createdCodes = []
+
+      for (const code of codes) {
+        const invitation = {
+          id: `inv-${code.toLowerCase()}-${Date.now()}`,
+          code: code,
+          createdBy: adminId,
+          createdAt: new Date().toISOString(),
+          maxUses: 10,
+          currentUses: 0,
+          isActive: true,
+          usedBy: []
+        }
+
+        await env.INVITATIONS_KV.put(`invitation:${code}`, JSON.stringify(invitation))
+        createdCodes.push(code)
+      }
+
+      return ResponseHelper.success({
+        message: 'System initialized successfully',
+        admin: {
+          email: adminEmail,
+          username: adminUsername
+        },
+        invitationCodes: createdCodes
+      })
+    } catch (error) {
+      console.error('System setup error:', error)
+      return ResponseHelper.internalServerError('System setup failed')
+    }
+  }
+
+  // System reset handler - for development/testing only
+  async systemResetHandler(request, env, ctx, context) {
+    try {
+      // Clear all system data (for development/testing)
+      await env.USERS_KV.delete('system:initialized')
+      await env.USERS_KV.delete('user_username:admin')
+      await env.USERS_KV.delete('user_email:1627333583@qq.com')
+
+      // Clear invitation codes
+      const invitationCodes = ['WELCOME', 'INVITE01', 'BETA2025']
+      for (const code of invitationCodes) {
+        await env.INVITATIONS_KV.delete(`invitation:${code}`)
+      }
+
+      return ResponseHelper.success({
+        message: 'System reset successfully',
+        timestamp: new Date().toISOString()
+      })
+    } catch (error) {
+      console.error('System reset error:', error)
+      return ResponseHelper.internalServerError('Failed to reset system')
+    }
+  }
+
+  // Files list handler
+  async filesListHandler(request, env, ctx, context) {
+    try {
+      const url = new URL(request.url)
+      const folderId = url.searchParams.get('folderId')
+
+      // Get files from KV store
+      const filesKey = folderId ? `files:folder:${folderId}` : 'files:root'
+      const filesData = await env.FILES_KV.get(filesKey)
+      const files = filesData ? JSON.parse(filesData) : []
+
+      return ResponseHelper.success(files)
+    } catch (error) {
+      console.error('Files list error:', error)
+      return ResponseHelper.internalServerError('Failed to fetch files')
+    }
+  }
+
+  // File upload handler
+  async fileUploadHandler(request, env, ctx, context) {
+    try {
+      const formData = await request.formData()
+      const file = formData.get('file')
+      const folderId = formData.get('folderId')
+
+      if (!file || !(file instanceof File)) {
+        return ResponseHelper.badRequest('No file provided')
+      }
+
+      // Validate file size (max 100MB)
+      const maxSize = 100 * 1024 * 1024 // 100MB
+      if (file.size > maxSize) {
+        return ResponseHelper.badRequest('File too large. Maximum size is 100MB')
+      }
+
+      // Generate unique file ID and key
+      const fileId = crypto.randomUUID()
+      const timestamp = Date.now()
+      const fileExtension = file.name.split('.').pop() || ''
+      const objectKey = `${timestamp}-${fileId}.${fileExtension}`
+
+      // Upload to R2
+      await env.FILES_BUCKET.put(objectKey, file.stream(), {
+        httpMetadata: {
+          contentType: file.type,
+          contentDisposition: `attachment; filename="${file.name}"`,
+        },
+        customMetadata: {
+          originalName: file.name,
+          uploadedBy: context.user.id,
+          uploadedAt: new Date().toISOString(),
+        },
+      })
+
+      // Create file metadata
+      const fileMetadata = {
+        id: fileId,
+        name: file.name,
+        size: file.size,
+        type: 'file', // This is the file/folder type
+        mimeType: file.type, // This is the MIME type
+        objectKey: objectKey,
+        folderId: folderId || null,
+        uploadedBy: context.user.id,
+        uploadedAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        isFolder: false,
+      }
+
+      // Store metadata in KV
+      await env.FILES_KV.put(`file:${fileId}`, JSON.stringify(fileMetadata))
+
+      // Add to folder's file list
+      const filesKey = folderId ? `files:folder:${folderId}` : 'files:root'
+      const existingFilesData = await env.FILES_KV.get(filesKey)
+      const existingFiles = existingFilesData ? JSON.parse(existingFilesData) : []
+      existingFiles.push(fileMetadata)
+      await env.FILES_KV.put(filesKey, JSON.stringify(existingFiles))
+
+      return ResponseHelper.success(fileMetadata)
+    } catch (error) {
+      console.error('File upload error:', error)
+      return ResponseHelper.internalServerError('Failed to upload file')
+    }
+  }
+
+  // File download handler
+  async fileDownloadHandler(request, env, ctx, context) {
+    try {
+      const url = new URL(request.url)
+      const fileId = url.pathname.split('/')[2] // Extract file ID from /files/:id/download
+
+      // Get file metadata
+      const fileData = await env.FILES_KV.get(`file:${fileId}`)
+      if (!fileData) {
+        return ResponseHelper.notFound('File not found')
+      }
+
+      const fileMetadata = JSON.parse(fileData)
+
+      // Get file from R2
+      const object = await env.FILES_BUCKET.get(fileMetadata.objectKey)
+      if (!object) {
+        return ResponseHelper.notFound('File not found in storage')
+      }
+
+      // Return file with appropriate headers
+      // Encode filename to handle Unicode characters
+      const encodedFilename = encodeURIComponent(fileMetadata.name)
+      return new Response(object.body, {
+        headers: {
+          'Content-Type': fileMetadata.mimeType || 'application/octet-stream',
+          'Content-Disposition': `attachment; filename*=UTF-8''${encodedFilename}`,
+          'Content-Length': fileMetadata.size.toString(),
+          'Cache-Control': 'public, max-age=31536000', // 1 year cache
+        },
+      })
+    } catch (error) {
+      console.error('File download error:', error)
+      return ResponseHelper.internalServerError('Failed to download file')
+    }
+  }
+
+  // File thumbnail handler
+  async fileThumbnailHandler(request, env, ctx, context) {
+    try {
+      const url = new URL(request.url)
+      const fileId = url.pathname.split('/')[2] // Extract file ID from /files/:id/thumbnail
+      const size = url.searchParams.get('size') || 'md' // sm, md, lg
+
+      // Get file metadata
+      const fileData = await env.FILES_KV.get(`file:${fileId}`)
+      if (!fileData) {
+        return ResponseHelper.notFound('File not found')
+      }
+
+      const fileMetadata = JSON.parse(fileData)
+
+      // Only generate thumbnails for images
+      if (!fileMetadata.mimeType || !fileMetadata.mimeType.startsWith('image/')) {
+        return ResponseHelper.badRequest('Thumbnails only available for images')
+      }
+
+      // For now, return the original image (in production, you'd use Cloudflare Images for resizing)
+      const object = await env.FILES_BUCKET.get(fileMetadata.objectKey)
+      if (!object) {
+        return ResponseHelper.notFound('File not found in storage')
+      }
+
+      return new Response(object.body, {
+        headers: {
+          'Content-Type': fileMetadata.mimeType,
+          'Cache-Control': 'public, max-age=31536000', // 1 year cache
+        },
+      })
+    } catch (error) {
+      console.error('File thumbnail error:', error)
+      return ResponseHelper.internalServerError('Failed to generate thumbnail')
+    }
+  }
+
+  // File delete handler
+  async fileDeleteHandler(request, env, ctx, context) {
+    try {
+      const url = new URL(request.url)
+      const fileId = url.pathname.split('/')[2] // Extract file ID from /files/:id
+
+      // Get file metadata
+      const fileData = await env.FILES_KV.get(`file:${fileId}`)
+      if (!fileData) {
+        return ResponseHelper.notFound('File not found')
+      }
+
+      const fileMetadata = JSON.parse(fileData)
+
+      // Check if user owns the file or is admin
+      if (fileMetadata.uploadedBy !== context.user.id && context.user.role !== 'admin') {
+        return ResponseHelper.forbidden('You can only delete your own files')
+      }
+
+      // Delete from R2
+      await env.FILES_BUCKET.delete(fileMetadata.objectKey)
+
+      // Delete metadata from KV
+      await env.FILES_KV.delete(`file:${fileId}`)
+
+      // Remove from folder's file list
+      const filesKey = fileMetadata.folderId ? `files:folder:${fileMetadata.folderId}` : 'files:root'
+      const existingFilesData = await env.FILES_KV.get(filesKey)
+      if (existingFilesData) {
+        const existingFiles = JSON.parse(existingFilesData)
+        const updatedFiles = existingFiles.filter(f => f.id !== fileId)
+        await env.FILES_KV.put(filesKey, JSON.stringify(updatedFiles))
+      }
+
+      return ResponseHelper.success({ message: 'File deleted successfully' })
+    } catch (error) {
+      console.error('File delete error:', error)
+      return ResponseHelper.internalServerError('Failed to delete file')
+    }
+  }
+
+  // File update handler (for renaming)
+  async fileUpdateHandler(request, env, ctx, context) {
+    try {
+      const url = new URL(request.url)
+      const fileId = url.pathname.split('/')[2] // Extract file ID from /files/:id
+
+      const body = await request.json()
+      const { name } = body
+
+      if (!name || typeof name !== 'string' || name.trim().length === 0) {
+        return ResponseHelper.badRequest('Valid file name is required')
+      }
+
+      // Get file metadata
+      const fileData = await env.FILES_KV.get(`file:${fileId}`)
+      if (!fileData) {
+        return ResponseHelper.notFound('File not found')
+      }
+
+      const fileMetadata = JSON.parse(fileData)
+
+      // Check if user owns the file or is admin
+      if (fileMetadata.uploadedBy !== context.user.id && context.user.role !== 'admin') {
+        return ResponseHelper.forbidden('You can only rename your own files')
+      }
+
+      // Update metadata
+      fileMetadata.name = name.trim()
+      fileMetadata.updatedAt = new Date().toISOString()
+
+      // Save updated metadata
+      await env.FILES_KV.put(`file:${fileId}`, JSON.stringify(fileMetadata))
+
+      // Update in folder's file list
+      const filesKey = fileMetadata.folderId ? `files:folder:${fileMetadata.folderId}` : 'files:root'
+      const existingFilesData = await env.FILES_KV.get(filesKey)
+      if (existingFilesData) {
+        const existingFiles = JSON.parse(existingFilesData)
+        const fileIndex = existingFiles.findIndex(f => f.id === fileId)
+        if (fileIndex !== -1) {
+          existingFiles[fileIndex] = fileMetadata
+          await env.FILES_KV.put(filesKey, JSON.stringify(existingFiles))
+        }
+      }
+
+      return ResponseHelper.success(fileMetadata)
+    } catch (error) {
+      console.error('File update error:', error)
+      return ResponseHelper.internalServerError('Failed to update file')
+    }
+  }
+
+
+}
+
+// ===== HELPER FUNCTIONS =====
+
+// Helper function to check if admin exists
+async function checkAdminExists(env) {
+  try {
+    // Try to find any user with admin role
+    // Since KV doesn't support queries, we'll check for a known admin pattern
+    // or use a special key to track initialization
+    const initFlag = await env.USERS_KV.get('system:initialized')
+    if (initFlag) {
+      return true
+    }
+
+    // Alternative: check for any user with admin role
+    // This is a simple check - in production you might want a more robust approach
+    const adminCheck = await env.USERS_KV.get('user_username:admin')
+    return !!adminCheck
+  } catch (error) {
+    console.error('Admin check error:', error)
+    return false
   }
 }
 

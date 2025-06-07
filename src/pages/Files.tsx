@@ -101,7 +101,7 @@ export default function Files() {
     setCurrentFolder(folder.id)
   }
 
-  const filteredFiles = files.filter(file =>
+  const filteredFiles = (Array.isArray(files) ? files : []).filter(file =>
     file.name.toLowerCase().includes(searchQuery.toLowerCase())
   )
 
@@ -277,11 +277,30 @@ export default function Files() {
             onClose={() => setShowAdvancedSearch(false)}
             onSearch={(filters) => {
               console.log('Search filters:', filters)
-              // Implement search logic here
+              // 应用搜索过滤器到文件存储
+              setSearchFilters({
+                query: filters.query,
+                type: filters.fileType,
+                dateRange: filters.dateRange,
+                sizeRange: filters.sizeRange,
+                owner: filters.owner,
+                tags: filters.tags,
+                isPublic: filters.isPublic
+              })
+              setSortOptions({
+                field: filters.sortBy,
+                direction: filters.sortOrder
+              })
+              // 重新获取文件
+              fetchFiles(currentFolder || undefined)
+              toast.success('Search filters applied')
             }}
             onReset={() => {
               setSearchQuery('')
-              // Reset other filters
+              setSearchFilters({})
+              setSortOptions({ field: 'name', direction: 'asc' })
+              fetchFiles(currentFolder || undefined)
+              toast.success('Search filters reset')
             }}
           />
         )}

@@ -83,8 +83,8 @@ export default function ShareModal({ file, onClose, onShare }: ShareModalProps) 
       setShareUrl(url)
       setIsShared(true)
       toast.success('Share link created successfully!')
-    } catch (error) {
-      toast.error('Failed to create share link')
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to create share link')
       console.error('Share error:', error)
     } finally {
       setIsLoading(false)
@@ -208,7 +208,7 @@ export default function ShareModal({ file, onClose, onShare }: ShareModalProps) 
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="w-full max-w-lg glass-card rounded-xl p-6">
+      <div className="w-full max-w-md glass-card rounded-xl p-4 sm:p-6 max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-3">

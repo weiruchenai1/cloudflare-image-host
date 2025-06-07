@@ -111,7 +111,9 @@ export const useFileStore = create<FileStore>((set, get) => ({
       params.append('sortOrder', sortOptions.direction)
 
       const response = await apiClient.get(`/files?${params.toString()}`)
-      set({ files: response.data, isLoading: false })
+      // Ensure files is always an array
+      const files = Array.isArray(response.data) ? response.data : []
+      set({ files, isLoading: false })
     } catch (error) {
       console.error('Failed to fetch files:', error)
       set({ isLoading: false })
@@ -131,10 +133,6 @@ export const useFileStore = create<FileStore>((set, get) => ({
       })
 
       try {
-        const formData = new FormData()
-        formData.append('file', file)
-        if (folderId) formData.append('folderId', folderId)
-
         // Update progress to uploading
         get().setUploadProgress(fileId, {
           fileId,
@@ -143,21 +141,15 @@ export const useFileStore = create<FileStore>((set, get) => ({
           status: 'uploading',
         })
 
-        const response = await apiClient.uploadFile('/files/upload', file, (progress: number) => {
-          get().setUploadProgress(fileId, {
-            fileId,
-            fileName: file.name,
-            progress,
-            status: 'uploading',
-          })
-        })
+        // Use the simple upload method
+        const response = await (apiClient as any).simpleUpload(file, folderId)
 
         // Update to processing
         get().setUploadProgress(fileId, {
           fileId,
           fileName: file.name,
-          progress: 100,
-          status: 'processing',
+          progress: 50,
+          status: 'uploading',
         })
 
         // Add file to store
@@ -182,7 +174,7 @@ export const useFileStore = create<FileStore>((set, get) => ({
           fileName: file.name,
           progress: 0,
           status: 'error',
-          error: error.response?.data?.message || 'Upload failed',
+          error: error.message || 'Upload failed',
         })
       }
     })

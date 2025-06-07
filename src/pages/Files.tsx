@@ -104,9 +104,34 @@ export default function Files() {
     setCurrentFolder(folder.id)
   }
 
-  const filteredFiles = (Array.isArray(files) ? files : []).filter(file =>
-    file.name.toLowerCase().includes(searchQuery.toLowerCase())
-  )
+  const filteredFiles = (Array.isArray(files) ? files : []).filter(file => {
+    // 基本搜索
+    const matchesSearch = file.name.toLowerCase().includes(searchQuery.toLowerCase())
+
+    // 高级搜索过滤器
+    let matchesFilters = true
+    if (searchFilters.type && searchFilters.type !== 'all') {
+      const fileType = file.mimeType?.split('/')[0] || 'other'
+      matchesFilters = matchesFilters && fileType === searchFilters.type
+    }
+
+    return matchesSearch && matchesFilters
+  }).sort((a, b) => {
+    // 应用排序选项
+    const field = sortOptions.field as keyof typeof a
+    const direction = sortOptions.direction
+
+    let aValue = a[field]
+    let bValue = b[field]
+
+    if (typeof aValue === 'string') aValue = aValue.toLowerCase()
+    if (typeof bValue === 'string') bValue = bValue.toLowerCase()
+
+    if (direction === 'desc') {
+      return aValue < bValue ? 1 : -1
+    }
+    return aValue > bValue ? 1 : -1
+  })
 
   const breadcrumbs = [
     { id: null, name: 'Home', icon: Home },

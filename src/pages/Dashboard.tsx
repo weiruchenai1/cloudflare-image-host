@@ -14,7 +14,6 @@ import {
   RefreshCw
 } from 'lucide-react'
 import { useAuthStore } from '@/store/authStore'
-import { useFileStore } from '@/store/fileStore'
 import { apiClient, formatFileSize } from '@/utils/api'
 import { StorageStats } from '@/types'
 import FileUpload from '@/components/FileManager/FileUpload'
@@ -24,7 +23,6 @@ import toast from 'react-hot-toast'
 
 export default function Dashboard() {
   const { user } = useAuthStore()
-  const navigate = useNavigate()
   const [stats, setStats] = useState<StorageStats | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [showUpload, setShowUpload] = useState(false)
@@ -255,7 +253,7 @@ export default function Dashboard() {
                     {file.name}
                   </p>
                   <p className="text-sm text-gray-600 dark:text-gray-400">
-                    {formatFileSize(file.size)} • {new Date(file.createdAt).toLocaleDateString()}
+                    {formatFileSize(file.size || 0)} • {new Date(file.createdAt).toLocaleDateString()}
                   </p>
                 </div>
               </div>

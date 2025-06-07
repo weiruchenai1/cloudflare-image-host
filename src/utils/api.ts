@@ -95,7 +95,7 @@ class ApiClient {
   async uploadFile(
     url: string,
     file: File,
-    onProgress?: (progress: number) => void,
+    _onProgress?: (progress: number) => void,
     folderId?: string
   ): Promise<ApiResponse> {
     const formData = new FormData()

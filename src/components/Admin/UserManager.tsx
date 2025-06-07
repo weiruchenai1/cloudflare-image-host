@@ -4,7 +4,6 @@ import {
   Users,
   Search,
   Filter,
-  Edit,
   Trash2,
   Shield,
   ShieldCheck,

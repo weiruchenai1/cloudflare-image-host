@@ -20,6 +20,7 @@ import KeyboardShortcutsHelp from '@/components/UI/KeyboardShortcutsHelp'
 import Button from '@/components/UI/Button'
 import LoadingSpinner from '@/components/UI/LoadingSpinner'
 import { useKeyboardShortcuts, commonShortcuts } from '@/hooks/useKeyboardShortcuts'
+import toast from 'react-hot-toast'
 
 export default function Files() {
   const { folderId } = useParams()
@@ -29,6 +30,8 @@ export default function Files() {
   const [showKeyboardHelp, setShowKeyboardHelp] = useState(false)
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid')
   const [searchQuery, setSearchQuery] = useState('')
+  const [searchFilters, setSearchFilters] = useState<any>({})
+  const [sortOptions, setSortOptions] = useState({ field: 'name', direction: 'asc' })
 
   const {
     files,

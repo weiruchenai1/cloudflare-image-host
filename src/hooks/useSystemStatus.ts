@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react'
-import { apiClient } from '@/utils/api'
 
 interface SystemStatus {
   initialized: boolean

@@ -12,6 +12,7 @@ export interface User {
   isActive: boolean;
   invitedBy?: string;
   avatar?: string;
+  bio?: string;
 }
 
 export interface InvitationCode {

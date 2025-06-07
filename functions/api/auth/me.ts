@@ -1,7 +1,10 @@
 // 获取当前用户信息 API
 import { verify } from '@tsndr/cloudflare-worker-jwt'
 
-export async function onRequestGet(context: any) {
+export async function onRequestGet(context: {
+  request: Request;
+  env: any;
+}) {
   const { request, env } = context
 
   try {

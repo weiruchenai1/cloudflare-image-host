@@ -1,5 +1,9 @@
 // Cloudflare Pages Functions 中间件
-export async function onRequest(context: any) {
+export async function onRequest(context: {
+  request: Request;
+  next: () => Promise<Response>;
+  env: any;
+}) {
   const { request, next, env } = context
 
   // CORS 处理

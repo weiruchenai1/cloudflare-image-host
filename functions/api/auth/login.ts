@@ -7,7 +7,10 @@ interface LoginRequest {
   rememberMe?: boolean
 }
 
-export async function onRequestPost(context: any) {
+export async function onRequestPost(context: {
+  request: Request;
+  env: any;
+}) {
   const { request, env } = context
 
   try {

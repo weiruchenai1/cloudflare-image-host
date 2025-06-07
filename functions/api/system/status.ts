@@ -1,5 +1,7 @@
 // 系统状态 API
-export async function onRequestGet(context: any) {
+export async function onRequestGet(context: {
+  env: any;
+}) {
   const { env } = context
 
   try {

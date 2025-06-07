@@ -1,7 +1,7 @@
 // 文件上传 API
 import { verify } from '@tsndr/cloudflare-worker-jwt'
 
-async function authenticateUser(request: Request, env: any) {
+async function authenticateUser(request: Request, env: any): Promise<any> {
   const authHeader = request.headers.get('Authorization')
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     throw new Error('Authorization token required')
@@ -22,7 +22,10 @@ async function authenticateUser(request: Request, env: any) {
   return JSON.parse(userData)
 }
 
-export async function onRequestPost(context: any) {
+export async function onRequestPost(context: {
+  request: Request;
+  env: any;
+}) {
   const { request, env } = context
 
   try {

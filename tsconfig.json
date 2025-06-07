@@ -26,7 +26,14 @@
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src"],
-  "exclude": ["functions"],
+  "include": ["src/**/*"],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "functions",
+    "workers",
+    "**/*.worker.ts",
+    "**/*.worker.js"
+  ],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

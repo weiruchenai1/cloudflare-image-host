@@ -2,8 +2,8 @@ import Cookies from 'js-cookie'
 import toast from 'react-hot-toast'
 import { ApiResponse } from '@/types'
 
-// API Configuration
-const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:8787'
+// API Configuration - 使用相对路径，因为 API 现在在同一个域名下
+const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || '/api'
 
 // Fetch wrapper with error handling
 async function fetchWithAuth(url: string, options: RequestInit = {}): Promise<Response> {

@@ -5,38 +5,6 @@ compatibility_date = "2024-01-15"
 # Pages Functions 配置
 pages_build_output_dir = "dist"
 
-# KV Namespaces
-[[kv_namespaces]]
-binding = "USERS_KV"
-id = "your-users-kv-namespace-id"
-preview_id = "your-users-kv-preview-id"
-
-[[kv_namespaces]]
-binding = "FILES_KV"
-id = "your-files-kv-namespace-id"
-preview_id = "your-files-kv-preview-id"
-
-[[kv_namespaces]]
-binding = "INVITATIONS_KV"
-id = "your-invitations-kv-namespace-id"
-preview_id = "your-invitations-kv-preview-id"
-
-[[kv_namespaces]]
-binding = "SESSIONS_KV"
-id = "your-sessions-kv-namespace-id"
-preview_id = "your-sessions-kv-preview-id"
-
-# R2 Buckets
-[[r2_buckets]]
-binding = "FILES_BUCKET"
-bucket_name = "cf-image-hosting-files"
-
-# Environment Variables
-[vars]
-JWT_SECRET = "your-jwt-secret-key"
-ADMIN_EMAIL = "admin@example.com"
-CORS_ORIGIN = "http://localhost:3000"
-
-# Production environment variables (set via wrangler secret)
-# wrangler secret put JWT_SECRET
-# wrangler secret put ADMIN_EMAIL
+# 注意：对于 Pages Functions，KV、R2 和环境变量
+# 应该在 Cloudflare Dashboard 的 Pages 项目设置中配置
+# 而不是在 wrangler.toml 中

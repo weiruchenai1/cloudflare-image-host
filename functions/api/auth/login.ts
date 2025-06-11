@@ -26,7 +26,7 @@ async function verifyPassword(password: string, hash: string): Promise<boolean> 
       false,
       ['deriveBits']
     );
-    const derivedKey = await crypto.subtle.deriveBits(
+    const derivedKeyBuffer = await crypto.subtle.deriveBits(
       {
         name: 'PBKDF2',
         salt: salt,
@@ -36,8 +36,20 @@ async function verifyPassword(password: string, hash: string): Promise<boolean> 
       keyMaterial,
       256
     );
-    return await crypto.subtle.timingSafeEqual(new Uint8Array(derivedKey), key);
+
+    const derivedKey = new Uint8Array(derivedKeyBuffer);
+    // 👇 手动实现安全的比较
+    if (derivedKey.length !== key.length) {
+      return false;
+    }
+    let diff = 0;
+    for (let i = 0; i < derivedKey.length; i++) {
+      diff |= derivedKey[i] ^ key[i];
+    }
+
+    return diff === 0;
   } catch (e) {
+    console.error("Password verification error:", e);
     return false;
   }
 }

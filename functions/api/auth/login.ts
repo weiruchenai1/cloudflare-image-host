@@ -5,7 +5,7 @@ interface Env {
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   try {
     const { request, env } = context;
-    const { username, password } = await request.json();
+    const { username, password } = await request.json() as { username: string; password: string };
 
     // 查找用户
     const userData = await env.IMAGE_HOST_KV.get(`user:username:${username}`);

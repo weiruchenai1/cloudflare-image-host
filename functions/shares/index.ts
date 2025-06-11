@@ -19,7 +19,12 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     }
 
     const { userId } = JSON.parse(tokenData);
-    const { fileId, password, expiresAt, maxViews } = await request.json();
+    const { fileId, password, expiresAt, maxViews } = await request.json() as {
+      fileId: string;
+      password?: string;
+      expiresAt?: string;
+      maxViews?: number;
+    };
 
     // 验证文件是否存在且属于用户
     const fileData = await env.IMAGE_HOST_KV.get(`file:${fileId}`);

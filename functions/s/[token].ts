@@ -86,7 +86,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
   }
 };
 
-function generatePasswordPage(token: string): string {
+function generatePasswordPage(_token: string): string {
   return `
 <!DOCTYPE html>
 <html lang="zh-CN">

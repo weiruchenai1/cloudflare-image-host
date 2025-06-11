@@ -29,7 +29,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       return new Response('Forbidden', { status: 403 });
     }
 
-    const { expiresAt, maxUses = 1 } = await request.json();
+    const { expiresAt, maxUses = 1 } = await request.json() as { expiresAt?: string; maxUses?: number };
 
     // 生成邀请码
     const inviteCode = crypto.randomUUID().replace(/-/g, '').substring(0, 16).toUpperCase();

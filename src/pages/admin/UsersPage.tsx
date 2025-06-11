@@ -1,11 +1,10 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { 
-  Users, 
-  UserPlus, 
-  Shield, 
-  ShieldOff, 
-  Edit, 
+import {
+  Users,
+  Shield,
+  ShieldOff,
+  Edit,
   Trash2,
   Search,
   Filter,
@@ -54,7 +53,7 @@ const UsersPage: React.FC = () => {
   };
 
   const toggleUserStatus = async (userId: string) => {
-    setUsers(prev => prev.map(user => 
+    setUsers((prev: typeof users) => prev.map((user: typeof users[0]) =>
       user.id === userId ? { ...user, isActive: !user.isActive } : user
     ));
     toast.success(language === 'zh' ? '用户状态已更新' : 'User status updated');
@@ -324,7 +323,7 @@ const UsersPage: React.FC = () => {
                 <input
                   type="datetime-local"
                   value={inviteData.expiresAt}
-                  onChange={(e) => setInviteData(prev => ({ ...prev, expiresAt: e.target.value }))}
+                  onChange={(e) => setInviteData((prev: typeof inviteData) => ({ ...prev, expiresAt: e.target.value }))}
                   className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg"
                 />
               </div>
@@ -337,7 +336,7 @@ const UsersPage: React.FC = () => {
                   type="number"
                   min="1"
                   value={inviteData.maxUses}
-                  onChange={(e) => setInviteData(prev => ({ ...prev, maxUses: parseInt(e.target.value) }))}
+                  onChange={(e) => setInviteData((prev: typeof inviteData) => ({ ...prev, maxUses: parseInt(e.target.value) }))}
                   className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg"
                 />
               </div>

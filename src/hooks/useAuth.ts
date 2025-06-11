@@ -16,7 +16,7 @@ export const useAuth = () => {
 
   const validateToken = async () => {
     try {
-      const response = await api.request('/auth/validate');
+      const response = await api.request<{ user?: any }>('/auth/validate');
       if (response.user) {
         setUser(response.user);
         setAuthenticated(true);
@@ -28,7 +28,7 @@ export const useAuth = () => {
 
   const login = async (credentials: { username: string; password: string }) => {
     try {
-      const response = await api.login(credentials);
+      const response = await api.login(credentials) as { token: string; user: any };
       api.setToken(response.token);
       setUser(response.user);
       setAuthenticated(true);

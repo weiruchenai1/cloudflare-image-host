@@ -1,15 +1,13 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Share, 
-  Link as LinkIcon, 
-  Eye, 
-  Clock, 
-  Copy, 
-  Trash2, 
+import {
+  Share,
+  Link as LinkIcon,
+  Eye,
+  Copy,
+  Trash2,
   Settings,
   Calendar,
-  Users,
   Lock,
   Globe
 } from 'lucide-react';
@@ -53,7 +51,7 @@ const SharesPage: React.FC = () => {
   };
 
   const deleteShare = (shareId: string) => {
-    setShares(prev => prev.filter(share => share.id !== shareId));
+    setShares((prev: typeof shares) => prev.filter((share: typeof shares[0]) => share.id !== shareId));
     toast.success(language === 'zh' ? '分享链接已删除' : 'Share link deleted');
   };
 

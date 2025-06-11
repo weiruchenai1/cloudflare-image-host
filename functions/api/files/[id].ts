@@ -86,7 +86,8 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
   try {
     const { request, env, params } = context;
     const fileId = params.id as string;
-    const { action, ...updateData } = await request.json();
+    const requestData = await request.json() as { action: string; [key: string]: any };
+    const { action, ...updateData } = requestData;
     
     // 验证用户身份
     const authHeader = request.headers.get('Authorization');

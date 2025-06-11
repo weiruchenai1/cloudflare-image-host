@@ -98,18 +98,17 @@ const UploadZone: React.FC = () => {
   return (
     <div className="space-y-6">
       {/* 上传区域 */}
-      <motion.div
+      <div
         {...getRootProps()}
         className={`
           relative border-2 border-dashed rounded-2xl p-12 text-center cursor-pointer
           transition-all duration-300 bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm
-          ${isDragActive 
-            ? 'border-blue-400 bg-blue-50/50 dark:bg-blue-900/20' 
+          hover:scale-[1.02] active:scale-[0.98]
+          ${isDragActive
+            ? 'border-blue-400 bg-blue-50/50 dark:bg-blue-900/20'
             : 'border-gray-300 dark:border-gray-600 hover:border-blue-400'
           }
         `}
-        whileHover={{ scale: 1.02 }}
-        whileTap={{ scale: 0.98 }}
       >
         <input {...getInputProps()} />
         
@@ -139,7 +138,7 @@ const UploadZone: React.FC = () => {
             <span className="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded">ZIP</span>
           </div>
         </motion.div>
-      </motion.div>
+      </div>
 
       {/* 文件列表 */}
       <AnimatePresence>

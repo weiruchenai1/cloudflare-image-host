@@ -16,7 +16,7 @@ const BackgroundContainer: React.FC = () => {
   useEffect(() => {
     if (settings.backgroundMode === 'carousel' && settings.backgroundImages.length > 1) {
       const interval = setInterval(() => {
-        setCurrentImageIndex((prev) => 
+        setCurrentImageIndex((prev: number) =>
           (prev + 1) % settings.backgroundImages.length
         );
       }, settings.backgroundInterval);
@@ -28,7 +28,7 @@ const BackgroundContainer: React.FC = () => {
   const fetchBingImage = async () => {
     try {
       const response = await fetch('https://www.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1');
-      const data = await response.json();
+      const data = await response.json() as { images?: { url: string }[] };
       if (data.images && data.images[0]) {
         setBingImage(`https://www.bing.com${data.images[0].url}`);
       }

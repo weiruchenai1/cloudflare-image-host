@@ -1,13 +1,12 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { 
-  Upload, 
-  FolderOpen, 
-  Share, 
-  HardDrive, 
+import {
+  Upload,
+  FolderOpen,
+  Share,
+  HardDrive,
   Activity,
   TrendingUp,
-  Users,
   FileText
 } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';

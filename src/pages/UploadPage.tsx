@@ -1,6 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { useDropzone } from 'react-dropzone';
+import { useDropzone, FileRejection } from 'react-dropzone';
 import { Upload, FileType, CheckCircle, AlertCircle, X, Folder, Tag } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useAppStore } from '../store/useAppStore';
@@ -19,27 +19,27 @@ const UploadPage: React.FC = () => {
   const [selectedFolder, setSelectedFolder] = useState('');
   const [tags, setTags] = useState('');
 
-  const onDrop = useCallback((acceptedFiles: File[], rejectedFiles: any[]) => {
+  const onDrop = useCallback((acceptedFiles: File[], rejectedFiles: FileRejection[]) => {
     // 处理被拒绝的文件
-    rejectedFiles.forEach((rejected) => {
+    rejectedFiles.forEach((rejected: FileRejection) => {
       toast.error(`${rejected.file.name}: ${language === 'zh' ? '文件类型不支持或文件过大' : 'File type not supported or file too large'}`);
     });
 
     const newFiles: UploadFile[] = acceptedFiles.map(file => ({
       ...file,
-      id: Math.random().toString(36).substr(2, 9),
+      id: Math.random().toString(36).substring(2, 11),
       progress: 0,
       status: 'pending'
     }));
     
-    setFiles(prev => [...prev, ...newFiles]);
+    setFiles((prev: UploadFile[]) => [...prev, ...newFiles]);
     
     // 开始上传
     newFiles.forEach(uploadFile);
   }, [language]);
 
   const uploadFile = async (file: UploadFile) => {
-    setFiles(prev => prev.map(f => 
+    setFiles((prev: UploadFile[]) => prev.map((f: UploadFile) =>
       f.id === file.id ? { ...f, status: 'uploading' } : f
     ));
 
@@ -54,7 +54,7 @@ const UploadPage: React.FC = () => {
       xhr.upload.onprogress = (e) => {
         if (e.lengthComputable) {
           const progress = Math.round((e.loaded / e.total) * 100);
-          setFiles(prev => prev.map(f => 
+          setFiles((prev: UploadFile[]) => prev.map((f: UploadFile) =>
             f.id === file.id ? { ...f, progress } : f
           ));
         }
@@ -63,8 +63,8 @@ const UploadPage: React.FC = () => {
       xhr.onload = () => {
         if (xhr.status === 200) {
           const response = JSON.parse(xhr.responseText);
-          setFiles(prev => prev.map(f => 
-            f.id === file.id 
+          setFiles((prev: UploadFile[]) => prev.map((f: UploadFile) =>
+            f.id === file.id
               ? { ...f, status: 'success', progress: 100, url: response.file.url }
               : f
           ));
@@ -75,7 +75,7 @@ const UploadPage: React.FC = () => {
       };
 
       xhr.onerror = () => {
-        setFiles(prev => prev.map(f => 
+        setFiles((prev: UploadFile[]) => prev.map((f: UploadFile) =>
           f.id === file.id ? { ...f, status: 'error', error: 'Network error' } : f
         ));
         toast.error(`${file.name} ${language === 'zh' ? '上传失败！' : 'upload failed!'}`);
@@ -88,7 +88,7 @@ const UploadPage: React.FC = () => {
       }
       xhr.send(formData);
     } catch (error) {
-      setFiles(prev => prev.map(f => 
+      setFiles((prev: UploadFile[]) => prev.map((f: UploadFile) =>
         f.id === file.id ? { ...f, status: 'error', error: 'Upload failed' } : f
       ));
       toast.error(`${file.name} ${language === 'zh' ? '上传失败！' : 'upload failed!'}`);
@@ -96,11 +96,11 @@ const UploadPage: React.FC = () => {
   };
 
   const removeFile = (fileId: string) => {
-    setFiles(prev => prev.filter(f => f.id !== fileId));
+    setFiles((prev: UploadFile[]) => prev.filter((f: UploadFile) => f.id !== fileId));
   };
 
   const retryUpload = (file: UploadFile) => {
-    setFiles(prev => prev.map(f => 
+    setFiles((prev: UploadFile[]) => prev.map((f: UploadFile) =>
       f.id === file.id ? { ...f, status: 'pending', progress: 0, error: undefined } : f
     ));
     uploadFile(file);

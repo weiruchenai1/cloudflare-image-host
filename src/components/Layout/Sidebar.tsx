@@ -1,11 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { NavLink, useLocation } from 'react-router-dom';
-import { 
-  Home, 
-  Upload, 
-  FolderOpen, 
-  Share, 
+import {
+  Home,
+  Upload,
+  FolderOpen,
+  Share,
   Settings,
   Users,
   BarChart3,
@@ -18,12 +18,12 @@ import { useAppStore } from '../../store/useAppStore';
 const Sidebar: React.FC = () => {
   const { user, language, sidebarCollapsed } = useAppStore();
   const location = useLocation();
-  const [expandedMenus, setExpandedMenus] = React.useState<string[]>(['admin']);
+  const [expandedMenus, setExpandedMenus] = useState<string[]>(['admin']);
 
   const toggleMenu = (menuId: string) => {
-    setExpandedMenus(prev => 
-      prev.includes(menuId) 
-        ? prev.filter(id => id !== menuId)
+    setExpandedMenus((prev: string[]) =>
+      prev.includes(menuId)
+        ? prev.filter((id: string) => id !== menuId)
         : [...prev, menuId]
     );
   };

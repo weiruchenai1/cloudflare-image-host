@@ -63,7 +63,11 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 export const onRequestPut: PagesFunction<Env> = async (context) => {
   try {
     const { request, env } = context;
-    const { userId: targetUserId, action, value } = await request.json();
+    const { userId: targetUserId, action, value } = await request.json() as {
+      userId: string;
+      action: string;
+      value?: any;
+    };
 
     // 验证管理员权限
     const authHeader = request.headers.get('Authorization');

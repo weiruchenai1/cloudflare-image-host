@@ -20,7 +20,13 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       siteName,
       siteTitle,
       defaultStorageQuota
-    } = await request.json();
+    } = await request.json() as {
+      adminUsername: string;
+      adminPassword: string;
+      siteName: string;
+      siteTitle: string;
+      defaultStorageQuota: number;
+    };
 
     // 创建管理员账户
     const adminId = crypto.randomUUID();

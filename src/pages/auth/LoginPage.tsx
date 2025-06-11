@@ -16,6 +16,11 @@ const LoginPage: React.FC = () => {
   const { setUser, setAuthenticated, language, setLanguage } = useAppStore();
   const navigate = useNavigate();
 
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData((prev: typeof formData) => ({ ...prev, [name]: value }));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -27,12 +32,12 @@ const LoginPage: React.FC = () => {
         body: JSON.stringify(formData)
       });
 
-      const data = await response.json();
+      const data = await response.json() as { user?: any; token?: string; message?: string };
 
       if (response.ok) {
         setUser(data.user);
         setAuthenticated(true);
-        localStorage.setItem('token', data.token);
+        localStorage.setItem('token', data.token || '');
         toast.success(language === 'zh' ? '登录成功！' : 'Login successful!');
         navigate('/dashboard');
       } else {
@@ -90,8 +95,9 @@ const LoginPage: React.FC = () => {
               </label>
               <input
                 type="text"
+                name="username"
                 value={formData.username}
-                onChange={(e) => setFormData(prev => ({ ...prev, username: e.target.value }))}
+                onChange={handleChange}
                 className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white/50 dark:bg-gray-700/50 text-gray-900 dark:text-white placeholder-gray-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
                 placeholder={language === 'zh' ? '请输入用户名' : 'Enter your username'}
                 required
@@ -105,8 +111,9 @@ const LoginPage: React.FC = () => {
               <div className="relative">
                 <input
                   type={showPassword ? 'text' : 'password'}
+                  name="password"
                   value={formData.password}
-                  onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
+                  onChange={handleChange}
                   className="w-full px-4 py-3 pr-12 border border-gray-300 dark:border-gray-600 rounded-lg bg-white/50 dark:bg-gray-700/50 text-gray-900 dark:text-white placeholder-gray-500 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all"
                   placeholder={language === 'zh' ? '请输入密码' : 'Enter your password'}
                   required

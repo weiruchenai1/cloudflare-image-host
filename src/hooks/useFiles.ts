@@ -34,7 +34,7 @@ export const useFiles = () => {
   });
 
   return {
-    files: filesQuery.data?.files || [],
+    files: (filesQuery.data as { files?: any[] })?.files || [],
     isLoading: filesQuery.isLoading,
     uploadFile: uploadMutation.mutate,
     deleteFile: deleteMutation.mutate,

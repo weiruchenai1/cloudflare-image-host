@@ -1,13 +1,12 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { 
-  User, 
-  Shield, 
-  Palette, 
-  Globe, 
-  Bell, 
+import {
+  User,
+  Shield,
+  Palette,
+  Globe,
+  Bell,
   Database,
-  Key,
   Save,
   Eye,
   EyeOff
@@ -36,6 +35,11 @@ const SettingsPage: React.FC = () => {
     { id: 'storage', icon: Database, label: language === 'zh' ? '存储设置' : 'Storage' }
   ];
 
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData((prev: typeof formData) => ({ ...prev, [name]: value }));
+  };
+
   const handleSave = () => {
     toast.success(language === 'zh' ? '设置已保存' : 'Settings saved successfully');
   };
@@ -54,8 +58,9 @@ const SettingsPage: React.FC = () => {
             </label>
             <input
               type="text"
+              name="username"
               value={formData.username}
-              onChange={(e) => setFormData(prev => ({ ...prev, username: e.target.value }))}
+              onChange={handleChange}
               className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white"
             />
           </div>
@@ -66,8 +71,9 @@ const SettingsPage: React.FC = () => {
             </label>
             <input
               type="email"
+              name="email"
               value={formData.email}
-              onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+              onChange={handleChange}
               className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white"
             />
           </div>
@@ -122,8 +128,9 @@ const SettingsPage: React.FC = () => {
             <div className="relative">
               <input
                 type={showPassword ? 'text' : 'password'}
+                name="currentPassword"
                 value={formData.currentPassword}
-                onChange={(e) => setFormData(prev => ({ ...prev, currentPassword: e.target.value }))}
+                onChange={handleChange}
                 className="w-full px-3 py-2 pr-10 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white"
               />
               <button
@@ -142,8 +149,9 @@ const SettingsPage: React.FC = () => {
             </label>
             <input
               type="password"
+              name="newPassword"
               value={formData.newPassword}
-              onChange={(e) => setFormData(prev => ({ ...prev, newPassword: e.target.value }))}
+              onChange={handleChange}
               className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white"
             />
           </div>
@@ -154,8 +162,9 @@ const SettingsPage: React.FC = () => {
             </label>
             <input
               type="password"
+              name="confirmPassword"
               value={formData.confirmPassword}
-              onChange={(e) => setFormData(prev => ({ ...prev, confirmPassword: e.target.value }))}
+              onChange={handleChange}
               className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white"
             />
           </div>

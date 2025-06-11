@@ -16,15 +16,14 @@ import { useAppStore } from '../../store/useAppStore';
 import { useNavigate } from 'react-router-dom';
 
 const Header: React.FC = () => {
-  const { 
-    user, 
-    theme, 
-    language, 
-    sidebarCollapsed, 
-    setTheme, 
-    setLanguage, 
-    toggleSidebar, 
-    logout 
+  const {
+    user,
+    theme,
+    language,
+    setTheme,
+    setLanguage,
+    toggleSidebar,
+    logout
   } = useAppStore();
   
   const navigate = useNavigate();

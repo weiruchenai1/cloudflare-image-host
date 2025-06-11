@@ -7,7 +7,12 @@ interface Env {
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   try {
     const { request, env } = context;
-    const { username, email, password, inviteCode } = await request.json();
+    const { username, email, password, inviteCode } = await request.json() as {
+      username: string;
+      email: string;
+      password: string;
+      inviteCode: string;
+    };
 
     // 验证邀请码
     const inviteData = await env.IMAGE_HOST_KV.get(`invite:${inviteCode}`);

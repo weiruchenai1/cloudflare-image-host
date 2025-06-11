@@ -1,0 +1,109 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Toast样式变量 */
+  --toast-bg: rgba(255, 255, 255, 0.9);
+  --toast-color: #1f2937;
+  --toast-border: rgba(229, 231, 235, 0.5);
+}
+
+.dark {
+  --toast-bg: rgba(31, 41, 55, 0.9);
+  --toast-color: #f9fafb;
+  --toast-border: rgba(75, 85, 99, 0.5);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* 自定义滚动条 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(156, 163, 175, 0.5);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(156, 163, 175, 0.8);
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: rgba(75, 85, 99, 0.5);
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: rgba(75, 85, 99, 0.8);
+}
+
+/* 动画优化 */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* 加载动画 */
+.loading-spinner {
+  @apply inline-block w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin;
+}
+
+/* 自定义工具类 */
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+  
+  .backdrop-blur-xs {
+    backdrop-filter: blur(2px);
+  }
+  
+  .glass {
+    @apply bg-white/70 dark:bg-gray-800/70 backdrop-blur-md border border-gray-200/50 dark:border-gray-700/50;
+  }
+  
+  .glass-hover {
+    @apply glass hover:bg-white/80 dark:hover:bg-gray-800/80 transition-all duration-200;
+  }
+}
+
+/* 打印样式 */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+}
+
+/* 高对比度模式支持 */
+@media (prefers-contrast: high) {
+  .glass {
+    @apply bg-white dark:bg-gray-800 border-gray-400 dark:border-gray-600;
+  }
+}
+

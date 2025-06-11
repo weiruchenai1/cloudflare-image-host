@@ -1,0 +1,13 @@
+name = "cloudflare-image-host"
+compatibility_date = "2023-12-01"
+
+[env.production]
+compatibility_flags = ["nodejs_compat"]
+
+[[env.production.kv_namespaces]]
+binding = "IMAGE_HOST_KV"
+id = "your-kv-namespace-id"
+
+[[env.production.r2_buckets]]
+binding = "IMAGE_HOST_R2"
+bucket_name = "your-r2-bucket-name"

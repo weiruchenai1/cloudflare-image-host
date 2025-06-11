@@ -2,6 +2,47 @@ interface Env {
   IMAGE_HOST_KV: KVNamespace;
 }
 
+// --- 辅助函数开始 ---
+function str2ab(str: string) {
+  const buf = new ArrayBuffer(str.length * 2);
+  const bufView = new Uint16Array(buf);
+  for (let i = 0, strLen = str.length; i < strLen; i++) {
+    bufView[i] = str.charCodeAt(i);
+  }
+  return buf;
+}
+
+async function verifyPassword(password: string, hash: string): Promise<boolean> {
+  try {
+    const [saltB64, keyB64] = hash.split(':');
+    if (!saltB64 || !keyB64) return false;
+    const salt = Uint8Array.from(atob(saltB64), c => c.charCodeAt(0));
+    const key = Uint8Array.from(atob(keyB64), c => c.charCodeAt(0));
+
+    const keyMaterial = await crypto.subtle.importKey(
+      'raw',
+      str2ab(password),
+      { name: 'PBKDF2' },
+      false,
+      ['deriveBits']
+    );
+    const derivedKey = await crypto.subtle.deriveBits(
+      {
+        name: 'PBKDF2',
+        salt: salt,
+        iterations: 100000,
+        hash: 'SHA-256',
+      },
+      keyMaterial,
+      256
+    );
+    return await crypto.subtle.timingSafeEqual(new Uint8Array(derivedKey), key);
+  } catch (e) {
+    return false;
+  }
+}
+// --- 辅助函数结束 ---
+
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   try {
     const { request, env } = context;
@@ -14,9 +55,11 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     }
 
     const user = JSON.parse(userData);
-    
-    // 验证密码 (实际项目中应该使用bcrypt等安全哈希)
-    if (user.password !== password) {
+
+    // 使用新的、安全的密码验证函数
+    const isPasswordValid = await verifyPassword(password, user.password);
+
+    if (!isPasswordValid) {
       return new Response('密码错误', { status: 401 });
     }
 

@@ -14,8 +14,63 @@ const InitSetupPage: React.FC = () => {
     defaultStorageQuota: 5,
   });
 
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setSetupData((prev: typeof setupData) => ({
+      ...prev,
+      [name]: name === 'defaultStorageQuota' ? parseInt(value) || 0 : value
+    }));
+  };
+
+  const validateStep = () => {
+    switch (step) {
+      case 1:
+        if (!setupData.adminUsername.trim()) {
+          toast.error('请输入管理员用户名');
+          return false;
+        }
+        if (setupData.adminUsername.length < 3) {
+          toast.error('用户名至少需要3个字符');
+          return false;
+        }
+        if (!setupData.adminPassword) {
+          toast.error('请输入管理员密码');
+          return false;
+        }
+        if (setupData.adminPassword.length < 6) {
+          toast.error('密码至少需要6个字符');
+          return false;
+        }
+        if (setupData.adminPassword !== setupData.confirmPassword) {
+          toast.error('两次输入的密码不一致');
+          return false;
+        }
+        return true;
+      case 2:
+        if (!setupData.siteName.trim()) {
+          toast.error('请输入网站名称');
+          return false;
+        }
+        if (!setupData.siteTitle.trim()) {
+          toast.error('请输入网站标题');
+          return false;
+        }
+        return true;
+      case 3:
+        if (setupData.defaultStorageQuota < 1 || setupData.defaultStorageQuota > 100) {
+          toast.error('存储配额必须在1-100GB之间');
+          return false;
+        }
+        return true;
+      default:
+        return true;
+    }
+  };
+
   const handleNext = () => {
-    if (step < 3) setStep(step + 1);
+    if (validateStep() && step < 3) {
+      setStep(step + 1);
+    }
   };
 
   const handlePrev = () => {
@@ -23,21 +78,41 @@ const InitSetupPage: React.FC = () => {
   };
 
   const handleFinish = async () => {
+    if (!validateStep()) return;
+
     try {
+      console.log('Sending setup data:', setupData);
+
       const response = await fetch('/api/setup', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(setupData)
       });
 
-      if (response.ok) {
+      console.log('Response status:', response.status);
+      console.log('Response headers:', response.headers);
+
+      let data;
+      try {
+        data = await response.json() as { success?: boolean; message?: string };
+        console.log('Response data:', data);
+      } catch (jsonError) {
+        console.error('Failed to parse JSON response:', jsonError);
+        const text = await response.text();
+        console.log('Response text:', text);
+        toast.error('服务器响应格式错误');
+        return;
+      }
+
+      if (response.ok && data.success) {
         toast.success('初始化完成！');
         window.location.href = '/login';
       } else {
-        toast.error('初始化失败');
+        toast.error(data.message || '初始化失败');
       }
     } catch (error) {
-      toast.error('网络错误');
+      console.error('Setup error:', error);
+      toast.error('网络错误，请检查连接');
     }
   };
 
@@ -65,8 +140,9 @@ const InitSetupPage: React.FC = () => {
                 </label>
                 <input
                   type="text"
+                  name="adminUsername"
                   value={setupData.adminUsername}
-                  onChange={(e) => setSetupData(prev => ({ ...prev, adminUsername: e.target.value }))}
+                  onChange={handleChange}
                   className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white/50 dark:bg-gray-700/50 text-gray-900 dark:text-white"
                   placeholder="请输入管理员用户名"
                   required
@@ -79,8 +155,9 @@ const InitSetupPage: React.FC = () => {
                 </label>
                 <input
                   type="password"
+                  name="adminPassword"
                   value={setupData.adminPassword}
-                  onChange={(e) => setSetupData(prev => ({ ...prev, adminPassword: e.target.value }))}
+                  onChange={handleChange}
                   className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white/50 dark:bg-gray-700/50 text-gray-900 dark:text-white"
                   placeholder="请输入密码"
                   required
@@ -93,8 +170,9 @@ const InitSetupPage: React.FC = () => {
                 </label>
                 <input
                   type="password"
+                  name="confirmPassword"
                   value={setupData.confirmPassword}
-                  onChange={(e) => setSetupData(prev => ({ ...prev, confirmPassword: e.target.value }))}
+                  onChange={handleChange}
                   className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white/50 dark:bg-gray-700/50 text-gray-900 dark:text-white"
                   placeholder="请再次输入密码"
                   required
@@ -126,8 +204,9 @@ const InitSetupPage: React.FC = () => {
                 </label>
                 <input
                   type="text"
+                  name="siteName"
                   value={setupData.siteName}
-                  onChange={(e) => setSetupData(prev => ({ ...prev, siteName: e.target.value }))}
+                  onChange={handleChange}
                   className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white/50 dark:bg-gray-700/50 text-gray-900 dark:text-white"
                   placeholder="请输入网站名称"
                 />
@@ -139,8 +218,9 @@ const InitSetupPage: React.FC = () => {
                 </label>
                 <input
                   type="text"
+                  name="siteTitle"
                   value={setupData.siteTitle}
-                  onChange={(e) => setSetupData(prev => ({ ...prev, siteTitle: e.target.value }))}
+                  onChange={handleChange}
                   className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white/50 dark:bg-gray-700/50 text-gray-900 dark:text-white"
                   placeholder="请输入网站标题"
                 />
@@ -171,10 +251,11 @@ const InitSetupPage: React.FC = () => {
                 </label>
                 <input
                   type="number"
+                  name="defaultStorageQuota"
                   min="1"
                   max="100"
                   value={setupData.defaultStorageQuota}
-                  onChange={(e) => setSetupData(prev => ({ ...prev, defaultStorageQuota: parseInt(e.target.value) }))}
+                  onChange={handleChange}
                   className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white/50 dark:bg-gray-700/50 text-gray-900 dark:text-white"
                 />
               </div>

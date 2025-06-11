@@ -1,8 +1,43 @@
-import { hash } from 'bcryptjs';
-
 interface Env {
   IMAGE_HOST_KV: KVNamespace;
 }
+
+// --- 辅助函数开始 ---
+function str2ab(str: string) {
+  const buf = new ArrayBuffer(str.length * 2);
+  const bufView = new Uint16Array(buf);
+  for (let i = 0, strLen = str.length; i < strLen; i++) {
+    bufView[i] = str.charCodeAt(i);
+  }
+  return buf;
+}
+
+async function hashPassword(password: string): Promise<string> {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw',
+    str2ab(password),
+    { name: 'PBKDF2' },
+    false,
+    ['deriveBits']
+  );
+  const key = await crypto.subtle.deriveBits(
+    {
+      name: 'PBKDF2',
+      salt: salt,
+      iterations: 100000,
+      hash: 'SHA-256',
+    },
+    keyMaterial,
+    256
+  );
+
+  const saltB64 = btoa(String.fromCharCode(...Array.from(salt)));
+  const keyB64 = btoa(String.fromCharCode(...Array.from(new Uint8Array(key))));
+
+  return `${saltB64}:${keyB64}`;
+}
+// --- 辅助函数结束 ---
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   try {
@@ -45,7 +80,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     // 创建用户
     const userId = crypto.randomUUID();
-    const hashedPassword = await hash(password, 12);
+    const hashedPassword = await hashPassword(password);
     
     const userData = {
       id: userId,

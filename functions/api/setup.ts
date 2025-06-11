@@ -1,17 +1,58 @@
-import { hash } from 'bcryptjs';
-
 interface Env {
   IMAGE_HOST_KV: KVNamespace;
 }
 
+// --- 辅助函数开始 ---
+function str2ab(str: string) {
+  const buf = new ArrayBuffer(str.length * 2);
+  const bufView = new Uint16Array(buf);
+  for (let i = 0, strLen = str.length; i < strLen; i++) {
+    bufView[i] = str.charCodeAt(i);
+  }
+  return buf;
+}
+
+async function hashPassword(password: string): Promise<string> {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const keyMaterial = await crypto.subtle.importKey(
+    'raw',
+    str2ab(password),
+    { name: 'PBKDF2' },
+    false,
+    ['deriveBits']
+  );
+  const key = await crypto.subtle.deriveBits(
+    {
+      name: 'PBKDF2',
+      salt: salt,
+      iterations: 100000,
+      hash: 'SHA-256',
+    },
+    keyMaterial,
+    256
+  );
+
+  const saltB64 = btoa(String.fromCharCode(...Array.from(salt)));
+  const keyB64 = btoa(String.fromCharCode(...Array.from(new Uint8Array(key))));
+
+  return `${saltB64}:${keyB64}`;
+}
+// --- 辅助函数结束 ---
+
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   try {
     const { request, env } = context;
-    
+
     // 检查是否已经初始化
     const isInitialized = await env.IMAGE_HOST_KV.get('system:initialized');
     if (isInitialized) {
-      return new Response('系统已经初始化', { status: 400 });
+      return new Response(JSON.stringify({
+        success: false,
+        message: '系统已经初始化'
+      }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
 
     const {
@@ -28,9 +69,40 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       defaultStorageQuota: number;
     };
 
+    // 验证输入
+    if (!adminUsername || !adminPassword || !siteName || !siteTitle) {
+      return new Response(JSON.stringify({
+        success: false,
+        message: '请填写所有必填字段'
+      }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    if (adminUsername.length < 3) {
+      return new Response(JSON.stringify({
+        success: false,
+        message: '用户名至少需要3个字符'
+      }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
+    if (adminPassword.length < 6) {
+      return new Response(JSON.stringify({
+        success: false,
+        message: '密码至少需要6个字符'
+      }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+
     // 创建管理员账户
     const adminId = crypto.randomUUID();
-    const hashedPassword = await hash(adminPassword, 12);
+    const hashedPassword = await hashPassword(adminPassword);
     
     const adminData = {
       id: adminId,
@@ -75,6 +147,12 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
   } catch (error) {
     console.error('Setup error:', error);
-    return new Response('初始化失败', { status: 500 });
+    return new Response(JSON.stringify({
+      success: false,
+      message: '初始化失败，请稍后重试'
+    }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
 };

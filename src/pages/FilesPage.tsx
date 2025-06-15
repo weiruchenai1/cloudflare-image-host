@@ -19,18 +19,57 @@ import {
   Calendar
 } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
-import { useFiles } from '../hooks/useFiles';
-import { FileItem } from '../types';
 import toast from 'react-hot-toast';
 
 const FilesPage: React.FC = () => {
   const { language } = useAppStore();
-  const { files, isLoading, deleteFile } = useFiles();
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilter, setSelectedFilter] = useState('all');
   const [showFileMenu, setShowFileMenu] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  // 模拟文件数据
+  const [files, setFiles] = useState([
+    {
+      id: '1',
+      name: 'sunset-beach.jpg',
+      type: 'image',
+      size: '2.4 MB',
+      uploadedAt: '2024-01-15',
+      thumbnail: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=300&h=200&fit=crop',
+      isPublic: true,
+      url: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4'
+    },
+    {
+      id: '2',
+      name: 'presentation.pdf',
+      type: 'document',
+      size: '5.8 MB',
+      uploadedAt: '2024-01-14',
+      isPublic: false,
+      url: '#'
+    },
+    {
+      id: '3',
+      name: 'demo-video.mp4',
+      type: 'video',
+      size: '15.2 MB',
+      uploadedAt: '2024-01-13',
+      thumbnail: 'https://images.unsplash.com/photo-1574269909862-7e1d70bb8078?w=300&h=200&fit=crop',
+      isPublic: true,
+      url: 'https://images.unsplash.com/photo-1574269909862-7e1d70bb8078'
+    },
+    {
+      id: '4',
+      name: 'archive.zip',
+      type: 'archive',
+      size: '8.5 MB',
+      uploadedAt: '2024-01-12',
+      isPublic: false,
+      url: '#'
+    }
+  ]);
 
   // 处理点击外部关闭菜单
   useEffect(() => {
@@ -59,14 +98,14 @@ const FilesPage: React.FC = () => {
   };
 
   const filteredFiles = files.filter(file => {
-    const matchesSearch = file.originalName.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesFilter = selectedFilter === 'all' || file.type.startsWith(selectedFilter);
+    const matchesSearch = file.name.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesFilter = selectedFilter === 'all' || file.type === selectedFilter;
     return matchesSearch && matchesFilter;
   });
 
   // 文件操作函数
-  const handlePreviewFile = (file: FileItem) => {
-    if (file.type.startsWith('image/') || file.type.startsWith('video/')) {
+  const handlePreviewFile = (file: typeof files[0]) => {
+    if (file.type === 'image' || file.type === 'video') {
       window.open(file.url, '_blank');
     } else {
       toast(language === 'zh' ? '预览功能开发中...' : 'Preview feature coming soon...', {
@@ -75,18 +114,24 @@ const FilesPage: React.FC = () => {
     }
   };
 
-  const handleDownloadFile = (file: FileItem) => {
-    const link = document.createElement('a');
-    link.href = file.url;
-    link.download = file.originalName;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    toast.success(language === 'zh' ? '开始下载...' : 'Download started...');
+  const handleDownloadFile = (file: typeof files[0]) => {
+    if (file.url && file.url !== '#') {
+      const link = document.createElement('a');
+      link.href = file.url;
+      link.download = file.name;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      toast.success(language === 'zh' ? '开始下载...' : 'Download started...');
+    } else {
+      toast(language === 'zh' ? '下载功能开发中...' : 'Download feature coming soon...', {
+        icon: 'ℹ️'
+      });
+    }
   };
 
-  const handleShareFile = (file: FileItem) => {
-    const shareUrl = `${window.location.origin}/s/${file.id}`;
+  const handleShareFile = (file: typeof files[0]) => {
+    const shareUrl = `${window.location.origin}/share/${file.id}`;
     navigator.clipboard.writeText(shareUrl).then(() => {
       toast.success(language === 'zh' ? '分享链接已复制' : 'Share link copied to clipboard');
     }).catch(() => {
@@ -94,22 +139,31 @@ const FilesPage: React.FC = () => {
     });
   };
 
-  const handleDeleteFile = (file: FileItem) => {
-    if (window.confirm(language === 'zh' ? `确定要删除 ${file.originalName} 吗？` : `Are you sure you want to delete ${file.originalName}?`)) {
-      deleteFile(file.id);
+  const handleDeleteFile = (file: typeof files[0]) => {
+    if (window.confirm(language === 'zh' ? `确定要删除 ${file.name} 吗？` : `Are you sure you want to delete ${file.name}?`)) {
+      setFiles(prev => prev.filter(f => f.id !== file.id));
+      toast.success(language === 'zh' ? '文件已删除' : 'File deleted');
     }
   };
 
   const handleCreateFolder = () => {
     const folderName = prompt(language === 'zh' ? '请输入文件夹名称：' : 'Enter folder name:');
     if (folderName) {
-      // TODO: 实现创建文件夹功能
       toast.success(language === 'zh' ? `文件夹 "${folderName}" 创建成功` : `Folder "${folderName}" created successfully`);
     }
   };
 
   const handleUploadFiles = () => {
-    window.location.href = '/upload';
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.multiple = true;
+    input.onchange = (e) => {
+      const files = (e.target as HTMLInputElement).files;
+      if (files && files.length > 0) {
+        toast.success(language === 'zh' ? `准备上传 ${files.length} 个文件` : `Ready to upload ${files.length} files`);
+      }
+    };
+    input.click();
   };
 
   // 处理菜单按钮点击
@@ -124,14 +178,6 @@ const FilesPage: React.FC = () => {
     action();
     setShowFileMenu(null);
   };
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-6">
@@ -199,10 +245,10 @@ const FilesPage: React.FC = () => {
             className="px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white"
           >
             <option value="all">{language === 'zh' ? '全部文件' : 'All Files'}</option>
-            <option value="image/">{language === 'zh' ? '图片' : 'Images'}</option>
-            <option value="video/">{language === 'zh' ? '视频' : 'Videos'}</option>
-            <option value="application/pdf">{language === 'zh' ? '文档' : 'Documents'}</option>
-            <option value="application/zip">{language === 'zh' ? '压缩包' : 'Archives'}</option>
+            <option value="image">{language === 'zh' ? '图片' : 'Images'}</option>
+            <option value="video">{language === 'zh' ? '视频' : 'Videos'}</option>
+            <option value="document">{language === 'zh' ? '文档' : 'Documents'}</option>
+            <option value="archive">{language === 'zh' ? '压缩包' : 'Archives'}</option>
           </select>
         </div>
         
@@ -252,10 +298,10 @@ const FilesPage: React.FC = () => {
                     className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-md rounded-xl p-4 border border-gray-200/50 dark:border-gray-700/50 shadow-lg hover:shadow-xl transition-all duration-300 group"
                   >
                     <div className="relative mb-4">
-                      {file.thumbnailUrl ? (
+                      {file.thumbnail ? (
                         <img
-                          src={file.thumbnailUrl}
-                          alt={file.originalName}
+                          src={file.thumbnail}
+                          alt={file.name}
                           className="w-full h-32 object-cover rounded-lg cursor-pointer"
                           onClick={() => handlePreviewFile(file)}
                         />
@@ -334,13 +380,13 @@ const FilesPage: React.FC = () => {
                     
                     <div>
                       <h3 className="font-medium text-gray-900 dark:text-white truncate mb-1">
-                        {file.originalName}
+                        {file.name}
                       </h3>
                       <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400">
-                        <span>{(file.size / 1024 / 1024).toFixed(2)} MB</span>
+                        <span>{file.size}</span>
                         <span className="flex items-center">
                           <Calendar className="w-3 h-3 mr-1" />
-                          {new Date(file.uploadedAt).toLocaleDateString()}
+                          {file.uploadedAt}
                         </span>
                       </div>
                       
@@ -400,10 +446,10 @@ const FilesPage: React.FC = () => {
                         >
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="flex items-center">
-                              {file.thumbnailUrl ? (
+                              {file.thumbnail ? (
                                 <img
-                                  src={file.thumbnailUrl}
-                                  alt={file.originalName}
+                                  src={file.thumbnail}
+                                  alt={file.name}
                                   className="w-10 h-10 object-cover rounded-lg mr-3 cursor-pointer"
                                   onClick={() => handlePreviewFile(file)}
                                 />
@@ -416,23 +462,23 @@ const FilesPage: React.FC = () => {
                                 </div>
                               )}
                               <span className="text-sm font-medium text-gray-900 dark:text-white">
-                                {file.originalName}
+                                {file.name}
                               </span>
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <span className="text-sm text-gray-500 dark:text-gray-400 capitalize">
-                              {file.type.split('/')[0]}
+                              {file.type}
                             </span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <span className="text-sm text-gray-500 dark:text-gray-400">
-                              {(file.size / 1024 / 1024).toFixed(2)} MB
+                              {file.size}
                             </span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <span className="text-sm text-gray-500 dark:text-gray-400">
-                              {new Date(file.uploadedAt).toLocaleDateString()}
+                              {file.uploadedAt}
                             </span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
@@ -462,7 +508,7 @@ const FilesPage: React.FC = () => {
                               </button>
                               <button 
                                 onClick={() => handleShareFile(file)}
-                                className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 p-1 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                                className="text-purple-600 hover:text-purple-800 dark:text-purple-400 dark:hover:text-purple-300 p-1 rounded hover:bg-purple-50 dark:hover:bg-purple-900/20"
                                 title={language === 'zh' ? '分享' : 'Share'}
                               >
                                 <Share className="w-4 h-4" />

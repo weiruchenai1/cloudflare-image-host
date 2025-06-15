@@ -72,7 +72,7 @@ class ApiClient {
     formData.append('file', file);
     if (folderId) formData.append('folderId', folderId);
 
-    return this.request('/api/upload', {
+    return this.request('/upload', {
       method: 'POST',
       headers: {
         ...(this.token && { Authorization: `Bearer ${this.token}` }),
@@ -135,24 +135,6 @@ class ApiClient {
       method: 'POST',
       body: JSON.stringify(options),
     });
-  }
-
-  // 仪表盘相关
-  async getStats() {
-    return this.request<{
-      totalStorage: number;
-      fileCount: number;
-      shareCount: number;
-      todayViews: number;
-    }>('/api/dashboard/stats');
-  }
-
-  async getStorageUsage() {
-    return this.request<{
-      used: number;
-      total: number;
-      percentage: number;
-    }>('/api/dashboard/storage');
   }
 }
 

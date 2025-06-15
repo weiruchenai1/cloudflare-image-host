@@ -5,7 +5,6 @@ import { Upload, FileType, CheckCircle, AlertCircle, X } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useAppStore } from '../../store/useAppStore';
 import { api } from '../../utils/api';
-import { FileItem } from '../../types';
 
 interface UploadFile extends File {
   id: string;

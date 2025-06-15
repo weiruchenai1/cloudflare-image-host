@@ -12,12 +12,8 @@
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
-    
-    // 👇 新增/修改的配置
-    "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
-    "forceConsistentCasingInFileNames": true,
-
+    
     /* Linting */
     "strict": true,
     "noUnusedLocals": true,

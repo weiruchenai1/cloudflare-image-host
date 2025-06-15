@@ -1,45 +1,88 @@
-class ApiClient {
+import { FileItem } from '../types';
+
+interface ApiResponse<T> {
+  success: boolean;
+  data?: T;
+  error?: string;
+}
+
+interface FilesResponse {
+  files: FileItem[];
+}
+
+interface ApiError {
+  message: string;
+}
+
+export class ApiClient {
   private baseURL: string;
-  private token: string | null = null;
 
-  constructor(baseURL: string = '/api') {
-    this.baseURL = baseURL;
-    this.token = localStorage.getItem('token');
+  constructor() {
+    this.baseURL = import.meta.env.VITE_API_BASE_URL || '/api';
   }
 
-  setToken(token: string) {
-    this.token = token;
-    localStorage.setItem('token', token);
-  }
-
-  clearToken() {
-    this.token = null;
-    localStorage.removeItem('token');
-  }
-
-  async request<T>(
-    endpoint: string,
-    options: RequestInit = {}
-  ): Promise<T> {
-    const url = `${this.baseURL}${endpoint}`;
-    
-    const config: RequestInit = {
-      headers: {
-        'Content-Type': 'application/json',
-        ...(this.token && { Authorization: `Bearer ${this.token}` }),
-        ...options.headers,
-      },
-      ...options,
+  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+    const token = localStorage.getItem('token');
+    const headers = {
+      'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      ...options.headers,
     };
 
-    const response = await fetch(url, config);
-    
+    const response = await fetch(`${this.baseURL}${endpoint}`, {
+      ...options,
+      headers,
+    });
+
     if (!response.ok) {
-      const error = await response.text();
-      throw new Error(error || 'Network error');
+      const error = await response.json().catch(() => ({ message: 'An error occurred' })) as ApiError;
+      throw new Error(error.message || 'An error occurred');
     }
 
     return response.json();
+  }
+
+  async getFiles(): Promise<FilesResponse> {
+    return this.request<FilesResponse>('/files');
+  }
+
+  async uploadFile(file: File, folderId?: string): Promise<ApiResponse<FileItem>> {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (folderId) {
+      formData.append('folderId', folderId);
+    }
+
+    const token = localStorage.getItem('token');
+    const headers: HeadersInit = {
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+    };
+
+    const response = await fetch(`${this.baseURL}/upload`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ message: 'Upload failed' })) as ApiError;
+      throw new Error(error.message || 'Upload failed');
+    }
+
+    return response.json();
+  }
+
+  async deleteFile(fileId: string): Promise<ApiResponse<void>> {
+    return this.request<ApiResponse<void>>(`/files/${fileId}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async updateFile(fileId: string, data: Partial<FileItem>): Promise<ApiResponse<FileItem>> {
+    return this.request<ApiResponse<FileItem>>(`/files/${fileId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
   }
 
   // 认证相关
@@ -64,35 +107,6 @@ class ApiClient {
 
   async logout() {
     return this.request('/auth/logout', { method: 'POST' });
-  }
-
-  // 文件相关
-  async uploadFile(file: File, folderId?: string) {
-    const formData = new FormData();
-    formData.append('file', file);
-    if (folderId) formData.append('folderId', folderId);
-
-    return this.request('/upload', {
-      method: 'POST',
-      headers: {
-        ...(this.token && { Authorization: `Bearer ${this.token}` }),
-      },
-      body: formData,
-    });
-  }
-
-  async getFiles(params?: {
-    page?: number;
-    limit?: number;
-    type?: string;
-    search?: string;
-  }) {
-    const query = new URLSearchParams(params as any).toString();
-    return this.request(`/files/list?${query}`);
-  }
-
-  async deleteFile(fileId: string) {
-    return this.request(`/files/${fileId}`, { method: 'DELETE' });
   }
 
   // 分享相关

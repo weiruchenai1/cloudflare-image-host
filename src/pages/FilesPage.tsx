@@ -19,6 +19,9 @@ import {
   Calendar
 } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
+import { useFiles } from '../hooks/useFiles';
+import { useSearchParams } from 'react-router-dom';
+import { FileItem } from '../types';
 import toast from 'react-hot-toast';
 
 const FilesPage: React.FC = () => {
@@ -28,48 +31,17 @@ const FilesPage: React.FC = () => {
   const [selectedFilter, setSelectedFilter] = useState('all');
   const [showFileMenu, setShowFileMenu] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
 
-  // 模拟文件数据
-  const [files, setFiles] = useState([
-    {
-      id: '1',
-      name: 'sunset-beach.jpg',
-      type: 'image',
-      size: '2.4 MB',
-      uploadedAt: '2024-01-15',
-      thumbnail: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=300&h=200&fit=crop',
-      isPublic: true,
-      url: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4'
-    },
-    {
-      id: '2',
-      name: 'presentation.pdf',
-      type: 'document',
-      size: '5.8 MB',
-      uploadedAt: '2024-01-14',
-      isPublic: false,
-      url: '#'
-    },
-    {
-      id: '3',
-      name: 'demo-video.mp4',
-      type: 'video',
-      size: '15.2 MB',
-      uploadedAt: '2024-01-13',
-      thumbnail: 'https://images.unsplash.com/photo-1574269909862-7e1d70bb8078?w=300&h=200&fit=crop',
-      isPublic: true,
-      url: 'https://images.unsplash.com/photo-1574269909862-7e1d70bb8078'
-    },
-    {
-      id: '4',
-      name: 'archive.zip',
-      type: 'archive',
-      size: '8.5 MB',
-      uploadedAt: '2024-01-12',
-      isPublic: false,
-      url: '#'
+  const { files, isLoading, deleteFile } = useFiles();
+
+  // 从URL参数中获取搜索查询
+  useEffect(() => {
+    const search = searchParams.get('search');
+    if (search) {
+      setSearchQuery(search);
     }
-  ]);
+  }, [searchParams]);
 
   // 处理点击外部关闭菜单
   useEffect(() => {
@@ -88,24 +60,30 @@ const FilesPage: React.FC = () => {
   }, [showFileMenu]);
 
   const getFileIcon = (type: string) => {
-    switch (type) {
-      case 'image': return Image;
-      case 'video': return Video;
-      case 'document': return FileText;
-      case 'archive': return Archive;
-      default: return FileText;
-    }
+    if (type.startsWith('image/')) return Image;
+    if (type.startsWith('video/')) return Video;
+    if (type === 'application/pdf') return FileText;
+    if (type.includes('zip') || type.includes('rar')) return Archive;
+    return FileText;
+  };
+
+  const getFileType = (type: string) => {
+    if (type.startsWith('image/')) return 'image';
+    if (type.startsWith('video/')) return 'video';
+    if (type === 'application/pdf') return 'document';
+    if (type.includes('zip') || type.includes('rar')) return 'archive';
+    return 'other';
   };
 
   const filteredFiles = files.filter(file => {
-    const matchesSearch = file.name.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesFilter = selectedFilter === 'all' || file.type === selectedFilter;
+    const matchesSearch = file.originalName.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesFilter = selectedFilter === 'all' || getFileType(file.type) === selectedFilter;
     return matchesSearch && matchesFilter;
   });
 
   // 文件操作函数
-  const handlePreviewFile = (file: typeof files[0]) => {
-    if (file.type === 'image' || file.type === 'video') {
+  const handlePreviewFile = (file: FileItem) => {
+    if (file.type.startsWith('image/') || file.type.startsWith('video/')) {
       window.open(file.url, '_blank');
     } else {
       toast(language === 'zh' ? '预览功能开发中...' : 'Preview feature coming soon...', {
@@ -114,11 +92,11 @@ const FilesPage: React.FC = () => {
     }
   };
 
-  const handleDownloadFile = (file: typeof files[0]) => {
-    if (file.url && file.url !== '#') {
+  const handleDownloadFile = (file: FileItem) => {
+    if (file.url) {
       const link = document.createElement('a');
       link.href = file.url;
-      link.download = file.name;
+      link.download = file.originalName;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -130,7 +108,7 @@ const FilesPage: React.FC = () => {
     }
   };
 
-  const handleShareFile = (file: typeof files[0]) => {
+  const handleShareFile = (file: FileItem) => {
     const shareUrl = `${window.location.origin}/share/${file.id}`;
     navigator.clipboard.writeText(shareUrl).then(() => {
       toast.success(language === 'zh' ? '分享链接已复制' : 'Share link copied to clipboard');
@@ -139,10 +117,9 @@ const FilesPage: React.FC = () => {
     });
   };
 
-  const handleDeleteFile = (file: typeof files[0]) => {
-    if (window.confirm(language === 'zh' ? `确定要删除 ${file.name} 吗？` : `Are you sure you want to delete ${file.name}?`)) {
-      setFiles(prev => prev.filter(f => f.id !== file.id));
-      toast.success(language === 'zh' ? '文件已删除' : 'File deleted');
+  const handleDeleteFile = (file: FileItem) => {
+    if (window.confirm(language === 'zh' ? `确定要删除 ${file.originalName} 吗？` : `Are you sure you want to delete ${file.originalName}?`)) {
+      deleteFile(file.id);
     }
   };
 
@@ -166,6 +143,16 @@ const FilesPage: React.FC = () => {
     input.click();
   };
 
+  // 处理搜索
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (searchQuery.trim()) {
+      setSearchParams({ search: searchQuery });
+    } else {
+      setSearchParams({});
+    }
+  };
+
   // 处理菜单按钮点击
   const handleMenuClick = (fileId: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -178,6 +165,14 @@ const FilesPage: React.FC = () => {
     action();
     setShowFileMenu(null);
   };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -226,7 +221,7 @@ const FilesPage: React.FC = () => {
         transition={{ delay: 0.1 }}
         className="flex flex-col sm:flex-row gap-4 bg-white/70 dark:bg-gray-800/70 backdrop-blur-md rounded-xl p-4 border border-gray-200/50 dark:border-gray-700/50"
       >
-        <div className="relative flex-1">
+        <form onSubmit={handleSearch} className="relative flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
             type="text"
@@ -235,7 +230,7 @@ const FilesPage: React.FC = () => {
             placeholder={language === 'zh' ? '搜索文件...' : 'Search files...'}
             className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
-        </div>
+        </form>
         
         <div className="flex items-center space-x-2">
           <Filter className="w-4 h-4 text-gray-500" />
@@ -252,7 +247,7 @@ const FilesPage: React.FC = () => {
           </select>
         </div>
         
-        <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
+        <div className="flex items-center space-x-2">
           <button
             onClick={() => setViewMode('grid')}
             className={`p-2 rounded-md transition-colors ${
@@ -297,11 +292,11 @@ const FilesPage: React.FC = () => {
                     whileHover={{ y: -4 }}
                     className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-md rounded-xl p-4 border border-gray-200/50 dark:border-gray-700/50 shadow-lg hover:shadow-xl transition-all duration-300 group"
                   >
-                    <div className="relative mb-4">
-                      {file.thumbnail ? (
+                    <div className="relative">
+                      {file.thumbnailUrl ? (
                         <img
-                          src={file.thumbnail}
-                          alt={file.name}
+                          src={file.thumbnailUrl}
+                          alt={file.originalName}
                           className="w-full h-32 object-cover rounded-lg cursor-pointer"
                           onClick={() => handlePreviewFile(file)}
                         />
@@ -378,15 +373,15 @@ const FilesPage: React.FC = () => {
                       </div>
                     </div>
                     
-                    <div>
+                    <div className="mt-4">
                       <h3 className="font-medium text-gray-900 dark:text-white truncate mb-1">
-                        {file.name}
+                        {file.originalName}
                       </h3>
                       <div className="flex items-center justify-between text-sm text-gray-500 dark:text-gray-400">
-                        <span>{file.size}</span>
+                        <span>{(file.size / 1024 / 1024).toFixed(2)} MB</span>
                         <span className="flex items-center">
                           <Calendar className="w-3 h-3 mr-1" />
-                          {file.uploadedAt}
+                          {new Date(file.uploadedAt).toLocaleDateString()}
                         </span>
                       </div>
                       
@@ -431,7 +426,7 @@ const FilesPage: React.FC = () => {
                     </th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                <tbody>
                   <AnimatePresence>
                     {filteredFiles.map((file, index) => {
                       const FileIcon = getFileIcon(file.type);
@@ -446,10 +441,10 @@ const FilesPage: React.FC = () => {
                         >
                           <td className="px-6 py-4 whitespace-nowrap">
                             <div className="flex items-center">
-                              {file.thumbnail ? (
+                              {file.thumbnailUrl ? (
                                 <img
-                                  src={file.thumbnail}
-                                  alt={file.name}
+                                  src={file.thumbnailUrl}
+                                  alt={file.originalName}
                                   className="w-10 h-10 object-cover rounded-lg mr-3 cursor-pointer"
                                   onClick={() => handlePreviewFile(file)}
                                 />
@@ -462,23 +457,23 @@ const FilesPage: React.FC = () => {
                                 </div>
                               )}
                               <span className="text-sm font-medium text-gray-900 dark:text-white">
-                                {file.name}
+                                {file.originalName}
                               </span>
                             </div>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <span className="text-sm text-gray-500 dark:text-gray-400 capitalize">
-                              {file.type}
+                              {getFileType(file.type)}
                             </span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <span className="text-sm text-gray-500 dark:text-gray-400">
-                              {file.size}
+                              {(file.size / 1024 / 1024).toFixed(2)} MB
                             </span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <span className="text-sm text-gray-500 dark:text-gray-400">
-                              {file.uploadedAt}
+                              {new Date(file.uploadedAt).toLocaleDateString()}
                             </span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
@@ -490,7 +485,7 @@ const FilesPage: React.FC = () => {
                               {file.isPublic ? (language === 'zh' ? '公开' : 'Public') : (language === 'zh' ? '私有' : 'Private')}
                             </span>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                          <td className="px-6 py-4 whitespace-nowrap text-right">
                             <div className="flex items-center justify-end space-x-2">
                               <button 
                                 onClick={() => handlePreviewFile(file)}

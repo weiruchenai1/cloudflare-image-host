@@ -1,6 +1,7 @@
 interface Env {
   IMAGE_HOST_KV: KVNamespace;
   IMAGE_HOST_R2: R2Bucket;
+  R2_DOMAIN: string;
 }
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
@@ -53,9 +54,9 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       'video/mp4', 'video/webm', 'video/quicktime',
       'application/pdf',
       'application/zip', 'application/x-rar-compressed'
-    ];
+    ] as const;
     
-    if (!allowedTypes.includes(file.type)) {
+    if (!allowedTypes.some(type => type === file.type)) {
       return new Response('不支持的文件类型', { status: 400 });
     }
 
@@ -64,8 +65,11 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const extension = file.name.split('.').pop()?.toLowerCase() || '';
     const fileName = `${userId}/${fileId}.${extension}`;
     
+    // 获取文件内容
+    const fileBuffer = await file.arrayBuffer();
+    
     // 上传原文件到R2
-    await env.IMAGE_HOST_R2.put(fileName, file.stream(), {
+    await env.IMAGE_HOST_R2.put(fileName, fileBuffer, {
       httpMetadata: {
         contentType: file.type,
       },
@@ -83,7 +87,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
               contentType: 'image/jpeg',
             },
           });
-          thumbnailUrl = `https://your-r2-domain.com/${thumbnailKey}`;
+          thumbnailUrl = `https://${env.R2_DOMAIN}/${thumbnailKey}`;
         }
       } catch (error) {
         console.warn('Thumbnail generation failed:', error);
@@ -97,7 +101,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       originalName: file.name,
       type: file.type,
       size: file.size,
-      url: `https://your-r2-domain.com/${fileName}`,
+      url: `https://${env.R2_DOMAIN}/${fileName}`,
       thumbnailUrl,
       folderId: folderId || null,
       userId,

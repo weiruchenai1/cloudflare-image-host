@@ -31,6 +31,12 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     // 解析文件数据
     const formData = await request.formData();
     const fileData = formData.get('file');
+    console.log('fileData:', fileData);
+    console.log('fileData typeof:', typeof fileData);
+    console.log('fileData is object:', typeof fileData === 'object' && fileData !== null);
+    console.log('fileData.name:', (fileData as any).name);
+    console.log('fileData.type:', (fileData as any).type);
+    console.log('fileData.size:', (fileData as any).size);
     const folderId = formData.get('folderId') as string;
     
     if (!fileData || typeof fileData !== 'object' || typeof (fileData as Blob).size !== 'number') {

@@ -1,7 +1,6 @@
 interface Env {
   IMAGE_HOST_KV: KVNamespace;
   IMAGE_HOST_R2: R2Bucket;
-  R2_DOMAIN: string;
 }
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
@@ -30,21 +29,12 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     
     // 解析文件数据
     const formData = await request.formData();
-    const fileData = formData.get('file');
-    console.log('fileData:', fileData);
-    console.log('fileData typeof:', typeof fileData);
-    console.log('fileData is object:', typeof fileData === 'object' && fileData !== null);
-    console.log('fileData.name:', (fileData as any).name);
-    console.log('fileData.type:', (fileData as any).type);
-    console.log('fileData.size:', (fileData as any).size);
+    const file = formData.get('file') as File;
     const folderId = formData.get('folderId') as string;
     
-    if (!fileData || typeof fileData !== 'object' || typeof (fileData as Blob).size !== 'number') {
-      return new Response('No file provided or invalid file', { status: 400 });
+    if (!file) {
+      return new Response('No file provided', { status: 400 });
     }
-    const blob = fileData as Blob;
-    // 兼容 File/Blob
-    const file: File = new File([blob], (blob as any).name || 'unknown', { type: (blob as any).type || '' });
 
     // 检查存储配额
     if (user.storageUsed + file.size > user.storageQuota) {
@@ -63,9 +53,9 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       'video/mp4', 'video/webm', 'video/quicktime',
       'application/pdf',
       'application/zip', 'application/x-rar-compressed'
-    ] as const;
+    ];
     
-    if (!allowedTypes.some(type => type === file.type)) {
+    if (!allowedTypes.includes(file.type)) {
       return new Response('不支持的文件类型', { status: 400 });
     }
 
@@ -74,11 +64,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const extension = file.name.split('.').pop()?.toLowerCase() || '';
     const fileName = `${userId}/${fileId}.${extension}`;
     
-    // 获取文件内容
-    const fileBuffer = await file.arrayBuffer();
-    
     // 上传原文件到R2
-    await env.IMAGE_HOST_R2.put(fileName, fileBuffer, {
+    await env.IMAGE_HOST_R2.put(fileName, file.stream(), {
       httpMetadata: {
         contentType: file.type,
       },
@@ -96,7 +83,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
               contentType: 'image/jpeg',
             },
           });
-          thumbnailUrl = `https://${env.R2_DOMAIN}/${thumbnailKey}`;
+          thumbnailUrl = `https://your-r2-domain.com/${thumbnailKey}`;
         }
       } catch (error) {
         console.warn('Thumbnail generation failed:', error);
@@ -110,7 +97,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       originalName: file.name,
       type: file.type,
       size: file.size,
-      url: `https://${env.R2_DOMAIN}/${fileName}`,
+      url: `https://your-r2-domain.com/${fileName}`,
       thumbnailUrl,
       folderId: folderId || null,
       userId,

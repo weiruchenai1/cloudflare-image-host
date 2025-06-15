@@ -3,19 +3,15 @@ import { useDropzone } from 'react-dropzone';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Upload, FileType, CheckCircle, AlertCircle, X } from 'lucide-react';
 import { toast } from 'react-hot-toast';
-import { useAppStore } from '../../store/useAppStore';
-import { api } from '../../utils/api';
 
 interface UploadFile extends File {
   id: string;
   progress: number;
   status: 'pending' | 'uploading' | 'success' | 'error';
   url?: string;
-  error?: string;
 }
 
 const UploadZone: React.FC = () => {
-  const { language } = useAppStore();
   const [files, setFiles] = useState<UploadFile[]>([]);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
@@ -38,31 +34,53 @@ const UploadZone: React.FC = () => {
     ));
 
     try {
-      const response = await api.uploadFile(file);
-      setFiles(prev => prev.map(f => 
-        f.id === file.id 
-          ? { ...f, status: 'success', progress: 100, url: response.data?.url }
-          : f
-      ));
-      toast.success(`${file.name} ${language === 'zh' ? '上传成功！' : 'uploaded successfully!'}`);
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const xhr = new XMLHttpRequest();
+      
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) {
+          const progress = Math.round((e.loaded / e.total) * 100);
+          setFiles(prev => prev.map(f => 
+            f.id === file.id ? { ...f, progress } : f
+          ));
+        }
+      };
+
+      xhr.onload = () => {
+        if (xhr.status === 200) {
+          const response = JSON.parse(xhr.responseText);
+          setFiles(prev => prev.map(f => 
+            f.id === file.id 
+              ? { ...f, status: 'success', progress: 100, url: response.url }
+              : f
+          ));
+          toast.success(`${file.name} 上传成功！`);
+        } else {
+          throw new Error('上传失败');
+        }
+      };
+
+      xhr.onerror = () => {
+        setFiles(prev => prev.map(f => 
+          f.id === file.id ? { ...f, status: 'error' } : f
+        ));
+        toast.error(`${file.name} 上传失败！`);
+      };
+
+      xhr.open('POST', '/api/upload');
+      xhr.send(formData);
     } catch (error) {
-      console.error('Upload error:', error);
       setFiles(prev => prev.map(f => 
-        f.id === file.id ? { ...f, status: 'error', error: error instanceof Error ? error.message : 'Upload failed' } : f
+        f.id === file.id ? { ...f, status: 'error' } : f
       ));
-      toast.error(`${file.name} ${language === 'zh' ? '上传失败！' : 'upload failed!'}`);
+      toast.error(`${file.name} 上传失败！`);
     }
   };
 
   const removeFile = (fileId: string) => {
     setFiles(prev => prev.filter(f => f.id !== fileId));
-  };
-
-  const retryUpload = (file: UploadFile) => {
-    setFiles(prev => prev.map(f => 
-      f.id === file.id ? { ...f, status: 'pending', progress: 0, error: undefined } : f
-    ));
-    uploadFile(file);
   };
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -105,16 +123,10 @@ const UploadZone: React.FC = () => {
           
           <div>
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-              {isDragActive 
-                ? (language === 'zh' ? '释放文件开始上传' : 'Release files to upload')
-                : (language === 'zh' ? '拖拽文件到此处或点击选择' : 'Drag files here or click to select')
-              }
+              {isDragActive ? '释放文件开始上传' : '拖拽文件到此处或点击选择'}
             </h3>
             <p className="text-gray-500 dark:text-gray-400">
-              {language === 'zh' 
-                ? '支持图片、视频、文档等多种格式，单文件最大 100MB'
-                : 'Support images, videos, documents and more, max 100MB per file'
-              }
+              支持图片、视频、文档等多种格式，单文件最大 100MB
             </p>
           </div>
           
@@ -128,7 +140,7 @@ const UploadZone: React.FC = () => {
         </motion.div>
       </div>
 
-      {/* 上传队列 */}
+      {/* 文件列表 */}
       <AnimatePresence>
         {files.length > 0 && (
           <motion.div
@@ -138,7 +150,7 @@ const UploadZone: React.FC = () => {
             className="space-y-3"
           >
             <h4 className="text-lg font-semibold text-gray-900 dark:text-white">
-              {language === 'zh' ? '上传队列' : 'Upload Queue'} ({files.length})
+              上传队列 ({files.length})
             </h4>
             
             {files.map((file) => (
@@ -165,15 +177,7 @@ const UploadZone: React.FC = () => {
                       <CheckCircle className="w-5 h-5 text-green-500" />
                     )}
                     {file.status === 'error' && (
-                      <div className="flex items-center space-x-2">
-                        <AlertCircle className="w-5 h-5 text-red-500" />
-                        <button
-                          onClick={() => retryUpload(file)}
-                          className="text-xs bg-red-100 hover:bg-red-200 text-red-700 px-2 py-1 rounded"
-                        >
-                          {language === 'zh' ? '重试' : 'Retry'}
-                        </button>
-                      </div>
+                      <AlertCircle className="w-5 h-5 text-red-500" />
                     )}
                     <button
                       onClick={() => removeFile(file.id)}
@@ -194,11 +198,6 @@ const UploadZone: React.FC = () => {
                       transition={{ duration: 0.3 }}
                     />
                   </div>
-                )}
-                
-                {/* 错误信息 */}
-                {file.status === 'error' && file.error && (
-                  <p className="mt-2 text-sm text-red-500">{file.error}</p>
                 )}
               </motion.div>
             ))}

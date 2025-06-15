@@ -14,6 +14,14 @@ interface UploadFile extends File {
   error?: string;
 }
 
+interface UploadResponse {
+  success: boolean;
+  file: {
+    url: string;
+    [key: string]: any;
+  };
+}
+
 const UploadPage: React.FC = () => {
   const { language } = useAppStore();
   const [files, setFiles] = useState<UploadFile[]>([]);
@@ -45,16 +53,26 @@ const UploadPage: React.FC = () => {
     ));
 
     try {
-      const response = await api.uploadFile(file, selectedFolder);
+      const formData = new FormData();
+      formData.append('file', file);
+      if (selectedFolder) formData.append('folderId', selectedFolder);
+      if (tags) formData.append('tags', tags);
+
+      const data = await api.uploadFile(file, selectedFolder) as UploadResponse;
+
+      if (data.success) {
+        setFiles((prev: UploadFile[]) => prev.map((f: UploadFile) =>
+          f.id === file.id
+            ? { ...f, status: 'success', progress: 100, url: data.file.url }
+            : f
+        ));
+        toast.success(`${file.name} ${language === 'zh' ? '上传成功！' : 'uploaded successfully!'}`);
+      } else {
+        throw new Error('Upload failed');
+      }
+    } catch (error: any) {
       setFiles((prev: UploadFile[]) => prev.map((f: UploadFile) =>
-        f.id === file.id
-          ? { ...f, status: 'success', progress: 100, url: response.data?.url }
-          : f
-      ));
-      toast.success(`${file.name} ${language === 'zh' ? '上传成功！' : 'uploaded successfully!'}`);
-    } catch (error) {
-      setFiles((prev: UploadFile[]) => prev.map((f: UploadFile) =>
-        f.id === file.id ? { ...f, status: 'error', error: error instanceof Error ? error.message : 'Upload failed' } : f
+        f.id === file.id ? { ...f, status: 'error', error: error.message || 'Upload failed' } : f
       ));
       toast.error(`${file.name} ${language === 'zh' ? '上传失败！' : 'upload failed!'}`);
     }

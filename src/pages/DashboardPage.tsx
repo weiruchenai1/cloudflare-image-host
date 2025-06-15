@@ -10,35 +10,57 @@ import {
   FileText
 } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
+import { useDashboard } from '../hooks/useDashboard';
 
 const DashboardPage: React.FC = () => {
   const { user, language } = useAppStore();
+  const { stats, storage, isLoading } = useDashboard();
 
-  const stats = [
+  const formatBytes = (bytes: number) => {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
+  };
+
+  const formatNumber = (num: number) => {
+    return new Intl.NumberFormat().format(num);
+  };
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+      </div>
+    );
+  }
+
+  const statsData = [
     {
       title: language === 'zh' ? '总存储' : 'Total Storage',
-      value: '85.2 GB',
+      value: formatBytes(stats?.totalStorage || 0),
       change: '+12%',
       icon: HardDrive,
       color: 'from-blue-500 to-blue-600'
     },
     {
       title: language === 'zh' ? '文件数量' : 'Files Count',
-      value: '1,284',
+      value: formatNumber(stats?.fileCount || 0),
       change: '+8%',
       icon: FileText,
       color: 'from-green-500 to-green-600'
     },
     {
       title: language === 'zh' ? '分享链接' : 'Share Links',
-      value: '156',
+      value: formatNumber(stats?.shareCount || 0),
       change: '+23%',
       icon: Share,
       color: 'from-purple-500 to-purple-600'
     },
     {
       title: language === 'zh' ? '今日访问' : 'Today Views',
-      value: '2,847',
+      value: formatNumber(stats?.todayViews || 0),
       change: '+15%',
       icon: Activity,
       color: 'from-orange-500 to-orange-600'
@@ -98,7 +120,7 @@ const DashboardPage: React.FC = () => {
         transition={{ delay: 0.1 }}
         className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6"
       >
-        {stats.map((stat, index) => {
+        {statsData.map((stat, index) => {
           const Icon = stat.icon;
           return (
             <motion.div
@@ -181,24 +203,24 @@ const DashboardPage: React.FC = () => {
         
         <div className="flex items-center justify-between mb-2">
           <span className="text-gray-600 dark:text-gray-400">
-            {language === 'zh' ? '已使用' : 'Used'}: 85.2 GB
+            {language === 'zh' ? '已使用' : 'Used'}: {formatBytes(storage?.used || 0)}
           </span>
           <span className="text-gray-600 dark:text-gray-400">
-            {language === 'zh' ? '总容量' : 'Total'}: 100 GB
+            {language === 'zh' ? '总容量' : 'Total'}: {formatBytes(storage?.total || 0)}
           </span>
         </div>
         
         <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 mb-4">
           <motion.div
             initial={{ width: 0 }}
-            animate={{ width: '85.2%' }}
+            animate={{ width: `${storage?.percentage || 0}%` }}
             transition={{ duration: 1, ease: "easeOut" }}
             className="bg-gradient-to-r from-blue-500 to-purple-600 h-3 rounded-full"
           />
         </div>
         
         <p className="text-sm text-gray-500 dark:text-gray-400">
-          {language === 'zh' ? '您还有 14.8 GB 可用空间' : 'You have 14.8 GB available space'}
+          {language === 'zh' ? '存储空间使用率' : 'Storage usage rate'}: {storage?.percentage || 0}%
         </p>
       </motion.div>
     </div>

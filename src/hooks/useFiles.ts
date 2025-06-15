@@ -1,57 +1,44 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../utils/api';
-import { FileItem } from '../types';
-import toast from 'react-hot-toast';
-import { useAppStore } from '../store/useAppStore';
-
-interface FilesResponse {
-  files: FileItem[];
-}
+import { toast } from 'react-hot-toast';
 
 export const useFiles = () => {
   const queryClient = useQueryClient();
-  const { language } = useAppStore();
 
-  const { data, isLoading } = useQuery<FilesResponse>({
+  const filesQuery = useQuery({
     queryKey: ['files'],
-    queryFn: async () => {
-      const response = await api.getFiles();
-      return response;
-    }
+    queryFn: () => api.getFiles(),
   });
 
-  const deleteFile = useMutation({
-    mutationFn: async (fileId: string) => {
-      await api.deleteFile(fileId);
-    },
+  const uploadMutation = useMutation({
+    mutationFn: ({ file, folderId }: { file: File; folderId?: string }) =>
+      api.uploadFile(file, folderId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['files'] });
-      toast.success(language === 'zh' ? '文件已删除' : 'File deleted');
+      queryClient.invalidateQueries(['files']);
+      toast.success('文件上传成功');
     },
-    onError: (error) => {
-      console.error('Error deleting file:', error);
-      toast.error(language === 'zh' ? '删除文件失败' : 'Failed to delete file');
-    }
+    onError: (error: any) => {
+      toast.error(error.message || '上传失败');
+    },
   });
 
-  const updateFile = useMutation({
-    mutationFn: async ({ fileId, data }: { fileId: string; data: Partial<FileItem> }) => {
-      await api.updateFile(fileId, data);
-    },
+  const deleteMutation = useMutation({
+    mutationFn: api.deleteFile,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['files'] });
-      toast.success(language === 'zh' ? '文件已更新' : 'File updated');
+      queryClient.invalidateQueries(['files']);
+      toast.success('文件删除成功');
     },
-    onError: (error) => {
-      console.error('Error updating file:', error);
-      toast.error(language === 'zh' ? '更新文件失败' : 'Failed to update file');
-    }
+    onError: (error: any) => {
+      toast.error(error.message || '删除失败');
+    },
   });
 
   return {
-    files: data?.files || [],
-    isLoading,
-    deleteFile: deleteFile.mutate,
-    updateFile: updateFile.mutate
+    files: (filesQuery.data as { files?: any[] })?.files || [],
+    isLoading: filesQuery.isLoading,
+    uploadFile: uploadMutation.mutate,
+    deleteFile: deleteMutation.mutate,
+    isUploading: uploadMutation.isPending,
+    isDeleting: deleteMutation.isPending,
   };
 };

@@ -20,28 +20,17 @@ import {
 } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import { useFiles } from '../hooks/useFiles';
-import { useSearchParams } from 'react-router-dom';
 import { FileItem } from '../types';
 import toast from 'react-hot-toast';
 
 const FilesPage: React.FC = () => {
   const { language } = useAppStore();
+  const { files, isLoading, deleteFile } = useFiles();
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFilter, setSelectedFilter] = useState('all');
   const [showFileMenu, setShowFileMenu] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
-  const [searchParams, setSearchParams] = useSearchParams();
-
-  const { files, isLoading, deleteFile } = useFiles();
-
-  // 从URL参数中获取搜索查询
-  useEffect(() => {
-    const search = searchParams.get('search');
-    if (search) {
-      setSearchQuery(search);
-    }
-  }, [searchParams]);
 
   // 处理点击外部关闭菜单
   useEffect(() => {
@@ -60,24 +49,18 @@ const FilesPage: React.FC = () => {
   }, [showFileMenu]);
 
   const getFileIcon = (type: string) => {
-    if (type.startsWith('image/')) return Image;
-    if (type.startsWith('video/')) return Video;
-    if (type === 'application/pdf') return FileText;
-    if (type.includes('zip') || type.includes('rar')) return Archive;
-    return FileText;
-  };
-
-  const getFileType = (type: string) => {
-    if (type.startsWith('image/')) return 'image';
-    if (type.startsWith('video/')) return 'video';
-    if (type === 'application/pdf') return 'document';
-    if (type.includes('zip') || type.includes('rar')) return 'archive';
-    return 'other';
+    switch (type) {
+      case 'image': return Image;
+      case 'video': return Video;
+      case 'document': return FileText;
+      case 'archive': return Archive;
+      default: return FileText;
+    }
   };
 
   const filteredFiles = files.filter(file => {
     const matchesSearch = file.originalName.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesFilter = selectedFilter === 'all' || getFileType(file.type) === selectedFilter;
+    const matchesFilter = selectedFilter === 'all' || file.type.startsWith(selectedFilter);
     return matchesSearch && matchesFilter;
   });
 
@@ -93,23 +76,17 @@ const FilesPage: React.FC = () => {
   };
 
   const handleDownloadFile = (file: FileItem) => {
-    if (file.url) {
-      const link = document.createElement('a');
-      link.href = file.url;
-      link.download = file.originalName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      toast.success(language === 'zh' ? '开始下载...' : 'Download started...');
-    } else {
-      toast(language === 'zh' ? '下载功能开发中...' : 'Download feature coming soon...', {
-        icon: 'ℹ️'
-      });
-    }
+    const link = document.createElement('a');
+    link.href = file.url;
+    link.download = file.originalName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    toast.success(language === 'zh' ? '开始下载...' : 'Download started...');
   };
 
   const handleShareFile = (file: FileItem) => {
-    const shareUrl = `${window.location.origin}/share/${file.id}`;
+    const shareUrl = `${window.location.origin}/s/${file.id}`;
     navigator.clipboard.writeText(shareUrl).then(() => {
       toast.success(language === 'zh' ? '分享链接已复制' : 'Share link copied to clipboard');
     }).catch(() => {
@@ -126,31 +103,13 @@ const FilesPage: React.FC = () => {
   const handleCreateFolder = () => {
     const folderName = prompt(language === 'zh' ? '请输入文件夹名称：' : 'Enter folder name:');
     if (folderName) {
+      // TODO: 实现创建文件夹功能
       toast.success(language === 'zh' ? `文件夹 "${folderName}" 创建成功` : `Folder "${folderName}" created successfully`);
     }
   };
 
   const handleUploadFiles = () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.multiple = true;
-    input.onchange = (e) => {
-      const files = (e.target as HTMLInputElement).files;
-      if (files && files.length > 0) {
-        toast.success(language === 'zh' ? `准备上传 ${files.length} 个文件` : `Ready to upload ${files.length} files`);
-      }
-    };
-    input.click();
-  };
-
-  // 处理搜索
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (searchQuery.trim()) {
-      setSearchParams({ search: searchQuery });
-    } else {
-      setSearchParams({});
-    }
+    window.location.href = '/upload';
   };
 
   // 处理菜单按钮点击
@@ -168,7 +127,7 @@ const FilesPage: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center h-full">
+      <div className="flex items-center justify-center h-64">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
       </div>
     );
@@ -221,7 +180,7 @@ const FilesPage: React.FC = () => {
         transition={{ delay: 0.1 }}
         className="flex flex-col sm:flex-row gap-4 bg-white/70 dark:bg-gray-800/70 backdrop-blur-md rounded-xl p-4 border border-gray-200/50 dark:border-gray-700/50"
       >
-        <form onSubmit={handleSearch} className="relative flex-1">
+        <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
           <input
             type="text"
@@ -230,7 +189,7 @@ const FilesPage: React.FC = () => {
             placeholder={language === 'zh' ? '搜索文件...' : 'Search files...'}
             className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
-        </form>
+        </div>
         
         <div className="flex items-center space-x-2">
           <Filter className="w-4 h-4 text-gray-500" />
@@ -240,14 +199,14 @@ const FilesPage: React.FC = () => {
             className="px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white"
           >
             <option value="all">{language === 'zh' ? '全部文件' : 'All Files'}</option>
-            <option value="image">{language === 'zh' ? '图片' : 'Images'}</option>
-            <option value="video">{language === 'zh' ? '视频' : 'Videos'}</option>
-            <option value="document">{language === 'zh' ? '文档' : 'Documents'}</option>
-            <option value="archive">{language === 'zh' ? '压缩包' : 'Archives'}</option>
+            <option value="image/">{language === 'zh' ? '图片' : 'Images'}</option>
+            <option value="video/">{language === 'zh' ? '视频' : 'Videos'}</option>
+            <option value="application/pdf">{language === 'zh' ? '文档' : 'Documents'}</option>
+            <option value="application/zip">{language === 'zh' ? '压缩包' : 'Archives'}</option>
           </select>
         </div>
         
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
           <button
             onClick={() => setViewMode('grid')}
             className={`p-2 rounded-md transition-colors ${
@@ -292,7 +251,7 @@ const FilesPage: React.FC = () => {
                     whileHover={{ y: -4 }}
                     className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-md rounded-xl p-4 border border-gray-200/50 dark:border-gray-700/50 shadow-lg hover:shadow-xl transition-all duration-300 group"
                   >
-                    <div className="relative">
+                    <div className="relative mb-4">
                       {file.thumbnailUrl ? (
                         <img
                           src={file.thumbnailUrl}
@@ -373,7 +332,7 @@ const FilesPage: React.FC = () => {
                       </div>
                     </div>
                     
-                    <div className="mt-4">
+                    <div>
                       <h3 className="font-medium text-gray-900 dark:text-white truncate mb-1">
                         {file.originalName}
                       </h3>
@@ -426,7 +385,7 @@ const FilesPage: React.FC = () => {
                     </th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                   <AnimatePresence>
                     {filteredFiles.map((file, index) => {
                       const FileIcon = getFileIcon(file.type);
@@ -463,7 +422,7 @@ const FilesPage: React.FC = () => {
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
                             <span className="text-sm text-gray-500 dark:text-gray-400 capitalize">
-                              {getFileType(file.type)}
+                              {file.type.split('/')[0]}
                             </span>
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap">
@@ -485,7 +444,7 @@ const FilesPage: React.FC = () => {
                               {file.isPublic ? (language === 'zh' ? '公开' : 'Public') : (language === 'zh' ? '私有' : 'Private')}
                             </span>
                           </td>
-                          <td className="px-6 py-4 whitespace-nowrap text-right">
+                          <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                             <div className="flex items-center justify-end space-x-2">
                               <button 
                                 onClick={() => handlePreviewFile(file)}
@@ -503,7 +462,7 @@ const FilesPage: React.FC = () => {
                               </button>
                               <button 
                                 onClick={() => handleShareFile(file)}
-                                className="text-purple-600 hover:text-purple-800 dark:text-purple-400 dark:hover:text-purple-300 p-1 rounded hover:bg-purple-50 dark:hover:bg-purple-900/20"
+                                className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 p-1 rounded hover:bg-blue-50 dark:hover:bg-blue-900/20"
                                 title={language === 'zh' ? '分享' : 'Share'}
                               >
                                 <Share className="w-4 h-4" />

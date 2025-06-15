@@ -1,25 +1,9 @@
-import { FileItem } from '../types';
-
-interface ApiResponse<T> {
-  success: boolean;
-  data?: T;
-  error?: string;
-}
-
-interface FilesResponse {
-  files: FileItem[];
-}
-
-interface ApiError {
-  message: string;
-}
-
-export class ApiClient {
+class ApiClient {
   private baseURL: string;
   private token: string | null = null;
 
-  constructor() {
-    this.baseURL = import.meta.env.VITE_API_BASE_URL || '/api';
+  constructor(baseURL: string = '/api') {
+    this.baseURL = baseURL;
     this.token = localStorage.getItem('token');
   }
 
@@ -33,71 +17,34 @@ export class ApiClient {
     localStorage.removeItem('token');
   }
 
-  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-    const headers = {
-      'Content-Type': 'application/json',
-      ...(this.token ? { 'Authorization': `Bearer ${this.token}` } : {}),
-      ...options.headers,
-    };
-
-    const response = await fetch(`${this.baseURL}${endpoint}`, {
+  async request<T>(
+    endpoint: string,
+    options: RequestInit = {}
+  ): Promise<T> {
+    const url = `${this.baseURL}${endpoint}`;
+    
+    const config: RequestInit = {
+      headers: {
+        'Content-Type': 'application/json',
+        ...(this.token && { Authorization: `Bearer ${this.token}` }),
+        ...options.headers,
+      },
       ...options,
-      headers,
-    });
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ message: 'An error occurred' })) as ApiError;
-      throw new Error(error.message || 'An error occurred');
-    }
-
-    return response.json();
-  }
-
-  async getFiles(): Promise<FilesResponse> {
-    return this.request<FilesResponse>('/files');
-  }
-
-  async uploadFile(file: File, folderId?: string): Promise<ApiResponse<FileItem>> {
-    const formData = new FormData();
-    formData.append('file', file, file.name);
-    if (folderId) {
-      formData.append('folderId', folderId);
-    }
-
-    const headers: HeadersInit = {
-      ...(this.token ? { 'Authorization': `Bearer ${this.token}` } : {}),
     };
 
-    const response = await fetch(`${this.baseURL}/upload`, {
-      method: 'POST',
-      headers,
-      body: formData,
-    });
-
+    const response = await fetch(url, config);
+    
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ message: 'Upload failed' })) as ApiError;
-      throw new Error(error.message || 'Upload failed');
+      const error = await response.text();
+      throw new Error(error || 'Network error');
     }
 
     return response.json();
-  }
-
-  async deleteFile(fileId: string): Promise<ApiResponse<void>> {
-    return this.request<ApiResponse<void>>(`/files/${fileId}`, {
-      method: 'DELETE',
-    });
-  }
-
-  async updateFile(fileId: string, data: Partial<FileItem>): Promise<ApiResponse<FileItem>> {
-    return this.request<ApiResponse<FileItem>>(`/files/${fileId}`, {
-      method: 'PATCH',
-      body: JSON.stringify(data),
-    });
   }
 
   // 认证相关
-  async login(credentials: { username: string; password: string }): Promise<ApiResponse<{ token: string }>> {
-    return this.request<ApiResponse<{ token: string }>>('/auth/login', {
+  async login(credentials: { username: string; password: string }) {
+    return this.request('/auth/login', {
       method: 'POST',
       body: JSON.stringify(credentials),
     });
@@ -108,15 +55,44 @@ export class ApiClient {
     email: string;
     password: string;
     inviteCode: string;
-  }): Promise<ApiResponse<{ token: string }>> {
-    return this.request<ApiResponse<{ token: string }>>('/auth/register', {
+  }) {
+    return this.request('/auth/register', {
       method: 'POST',
       body: JSON.stringify(data),
     });
   }
 
-  async logout(): Promise<ApiResponse<void>> {
-    return this.request<ApiResponse<void>>('/auth/logout', { method: 'POST' });
+  async logout() {
+    return this.request('/auth/logout', { method: 'POST' });
+  }
+
+  // 文件相关
+  async uploadFile(file: File, folderId?: string) {
+    const formData = new FormData();
+    formData.append('file', file);
+    if (folderId) formData.append('folderId', folderId);
+
+    return this.request('/api/upload', {
+      method: 'POST',
+      headers: {
+        ...(this.token && { Authorization: `Bearer ${this.token}` }),
+      },
+      body: formData,
+    });
+  }
+
+  async getFiles(params?: {
+    page?: number;
+    limit?: number;
+    type?: string;
+    search?: string;
+  }) {
+    const query = new URLSearchParams(params as any).toString();
+    return this.request(`/files/list?${query}`);
+  }
+
+  async deleteFile(fileId: string) {
+    return this.request(`/files/${fileId}`, { method: 'DELETE' });
   }
 
   // 分享相关
@@ -124,28 +100,28 @@ export class ApiClient {
     password?: string;
     expiresAt?: string;
     maxViews?: number;
-  }): Promise<ApiResponse<{ shareUrl: string }>> {
-    return this.request<ApiResponse<{ shareUrl: string }>>('/shares', {
+  }) {
+    return this.request('/shares', {
       method: 'POST',
       body: JSON.stringify({ fileId, ...options }),
     });
   }
 
-  async getShares(): Promise<ApiResponse<Array<{ id: string; fileId: string; shareUrl: string }>>> {
-    return this.request<ApiResponse<Array<{ id: string; fileId: string; shareUrl: string }>>>('/shares');
+  async getShares() {
+    return this.request('/shares');
   }
 
-  async deleteShare(shareId: string): Promise<ApiResponse<void>> {
-    return this.request<ApiResponse<void>>(`/shares/${shareId}`, { method: 'DELETE' });
+  async deleteShare(shareId: string) {
+    return this.request(`/shares/${shareId}`, { method: 'DELETE' });
   }
 
   // 管理员相关
-  async getUsers(): Promise<ApiResponse<Array<{ id: string; username: string; email: string; role: string }>>> {
-    return this.request<ApiResponse<Array<{ id: string; username: string; email: string; role: string }>>>('/admin/users');
+  async getUsers() {
+    return this.request('/admin/users');
   }
 
-  async updateUser(userId: string, action: string, value?: any): Promise<ApiResponse<void>> {
-    return this.request<ApiResponse<void>>('/admin/users', {
+  async updateUser(userId: string, action: string, value?: any) {
+    return this.request('/admin/users', {
       method: 'PUT',
       body: JSON.stringify({ userId, action, value }),
     });
@@ -154,11 +130,29 @@ export class ApiClient {
   async generateInviteCode(options: {
     expiresAt?: string;
     maxUses?: number;
-  }): Promise<ApiResponse<{ code: string }>> {
-    return this.request<ApiResponse<{ code: string }>>('/admin/invites', {
+  }) {
+    return this.request('/admin/invites', {
       method: 'POST',
       body: JSON.stringify(options),
     });
+  }
+
+  // 仪表盘相关
+  async getStats() {
+    return this.request<{
+      totalStorage: number;
+      fileCount: number;
+      shareCount: number;
+      todayViews: number;
+    }>('/api/dashboard/stats');
+  }
+
+  async getStorageUsage() {
+    return this.request<{
+      used: number;
+      total: number;
+      percentage: number;
+    }>('/api/dashboard/storage');
   }
 }
 

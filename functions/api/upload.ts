@@ -33,11 +33,12 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const fileData = formData.get('file');
     const folderId = formData.get('folderId') as string;
     
-    if (!fileData || typeof fileData !== 'object') {
+    if (!fileData || typeof fileData !== 'object' || typeof (fileData as Blob).size !== 'number') {
       return new Response('No file provided or invalid file', { status: 400 });
     }
-
-    const file = fileData as unknown as File;
+    const blob = fileData as Blob;
+    // 兼容 File/Blob
+    const file: File = new File([blob], (blob as any).name || 'unknown', { type: (blob as any).type || '' });
 
     // 检查存储配额
     if (user.storageUsed + file.size > user.storageQuota) {

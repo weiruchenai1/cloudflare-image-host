@@ -59,7 +59,7 @@ export class ApiClient {
 
   async uploadFile(file: File, folderId?: string): Promise<ApiResponse<FileItem>> {
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append('file', file, file.name);
     if (folderId) {
       formData.append('folderId', folderId);
     }

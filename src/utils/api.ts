@@ -16,16 +16,27 @@ interface ApiError {
 
 export class ApiClient {
   private baseURL: string;
+  private token: string | null = null;
 
   constructor() {
     this.baseURL = import.meta.env.VITE_API_BASE_URL || '/api';
+    this.token = localStorage.getItem('token');
+  }
+
+  setToken(token: string) {
+    this.token = token;
+    localStorage.setItem('token', token);
+  }
+
+  clearToken() {
+    this.token = null;
+    localStorage.removeItem('token');
   }
 
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-    const token = localStorage.getItem('token');
     const headers = {
       'Content-Type': 'application/json',
-      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      ...(this.token ? { 'Authorization': `Bearer ${this.token}` } : {}),
       ...options.headers,
     };
 
@@ -53,9 +64,8 @@ export class ApiClient {
       formData.append('folderId', folderId);
     }
 
-    const token = localStorage.getItem('token');
     const headers: HeadersInit = {
-      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+      ...(this.token ? { 'Authorization': `Bearer ${this.token}` } : {}),
     };
 
     const response = await fetch(`${this.baseURL}/upload`, {
@@ -86,8 +96,8 @@ export class ApiClient {
   }
 
   // 认证相关
-  async login(credentials: { username: string; password: string }) {
-    return this.request('/auth/login', {
+  async login(credentials: { username: string; password: string }): Promise<ApiResponse<{ token: string }>> {
+    return this.request<ApiResponse<{ token: string }>>('/auth/login', {
       method: 'POST',
       body: JSON.stringify(credentials),
     });
@@ -98,15 +108,15 @@ export class ApiClient {
     email: string;
     password: string;
     inviteCode: string;
-  }) {
-    return this.request('/auth/register', {
+  }): Promise<ApiResponse<{ token: string }>> {
+    return this.request<ApiResponse<{ token: string }>>('/auth/register', {
       method: 'POST',
       body: JSON.stringify(data),
     });
   }
 
-  async logout() {
-    return this.request('/auth/logout', { method: 'POST' });
+  async logout(): Promise<ApiResponse<void>> {
+    return this.request<ApiResponse<void>>('/auth/logout', { method: 'POST' });
   }
 
   // 分享相关
@@ -114,28 +124,28 @@ export class ApiClient {
     password?: string;
     expiresAt?: string;
     maxViews?: number;
-  }) {
-    return this.request('/shares', {
+  }): Promise<ApiResponse<{ shareUrl: string }>> {
+    return this.request<ApiResponse<{ shareUrl: string }>>('/shares', {
       method: 'POST',
       body: JSON.stringify({ fileId, ...options }),
     });
   }
 
-  async getShares() {
-    return this.request('/shares');
+  async getShares(): Promise<ApiResponse<Array<{ id: string; fileId: string; shareUrl: string }>>> {
+    return this.request<ApiResponse<Array<{ id: string; fileId: string; shareUrl: string }>>>('/shares');
   }
 
-  async deleteShare(shareId: string) {
-    return this.request(`/shares/${shareId}`, { method: 'DELETE' });
+  async deleteShare(shareId: string): Promise<ApiResponse<void>> {
+    return this.request<ApiResponse<void>>(`/shares/${shareId}`, { method: 'DELETE' });
   }
 
   // 管理员相关
-  async getUsers() {
-    return this.request('/admin/users');
+  async getUsers(): Promise<ApiResponse<Array<{ id: string; username: string; email: string; role: string }>>> {
+    return this.request<ApiResponse<Array<{ id: string; username: string; email: string; role: string }>>>('/admin/users');
   }
 
-  async updateUser(userId: string, action: string, value?: any) {
-    return this.request('/admin/users', {
+  async updateUser(userId: string, action: string, value?: any): Promise<ApiResponse<void>> {
+    return this.request<ApiResponse<void>>('/admin/users', {
       method: 'PUT',
       body: JSON.stringify({ userId, action, value }),
     });
@@ -144,8 +154,8 @@ export class ApiClient {
   async generateInviteCode(options: {
     expiresAt?: string;
     maxUses?: number;
-  }) {
-    return this.request('/admin/invites', {
+  }): Promise<ApiResponse<{ code: string }>> {
+    return this.request<ApiResponse<{ code: string }>>('/admin/invites', {
       method: 'POST',
       body: JSON.stringify(options),
     });

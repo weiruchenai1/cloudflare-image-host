@@ -4,6 +4,7 @@ import { useDropzone, FileRejection } from 'react-dropzone';
 import { Upload, FileType, CheckCircle, AlertCircle, X, Folder, Tag } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useAppStore } from '../store/useAppStore';
+import { api } from '../utils/api';
 
 interface UploadFile extends File {
   id: string;
@@ -44,52 +45,16 @@ const UploadPage: React.FC = () => {
     ));
 
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      if (selectedFolder) formData.append('folderId', selectedFolder);
-      if (tags) formData.append('tags', tags);
-
-      const xhr = new XMLHttpRequest();
-      
-      xhr.upload.onprogress = (e) => {
-        if (e.lengthComputable) {
-          const progress = Math.round((e.loaded / e.total) * 100);
-          setFiles((prev: UploadFile[]) => prev.map((f: UploadFile) =>
-            f.id === file.id ? { ...f, progress } : f
-          ));
-        }
-      };
-
-      xhr.onload = () => {
-        if (xhr.status === 200) {
-          const response = JSON.parse(xhr.responseText);
-          setFiles((prev: UploadFile[]) => prev.map((f: UploadFile) =>
-            f.id === file.id
-              ? { ...f, status: 'success', progress: 100, url: response.file.url }
-              : f
-          ));
-          toast.success(`${file.name} ${language === 'zh' ? '上传成功！' : 'uploaded successfully!'}`);
-        } else {
-          throw new Error('Upload failed');
-        }
-      };
-
-      xhr.onerror = () => {
-        setFiles((prev: UploadFile[]) => prev.map((f: UploadFile) =>
-          f.id === file.id ? { ...f, status: 'error', error: 'Network error' } : f
-        ));
-        toast.error(`${file.name} ${language === 'zh' ? '上传失败！' : 'upload failed!'}`);
-      };
-
-      const token = localStorage.getItem('token');
-      xhr.open('POST', '/api/upload');
-      if (token) {
-        xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-      }
-      xhr.send(formData);
+      const response = await api.uploadFile(file, selectedFolder);
+      setFiles((prev: UploadFile[]) => prev.map((f: UploadFile) =>
+        f.id === file.id
+          ? { ...f, status: 'success', progress: 100, url: response.data?.url }
+          : f
+      ));
+      toast.success(`${file.name} ${language === 'zh' ? '上传成功！' : 'uploaded successfully!'}`);
     } catch (error) {
       setFiles((prev: UploadFile[]) => prev.map((f: UploadFile) =>
-        f.id === file.id ? { ...f, status: 'error', error: 'Upload failed' } : f
+        f.id === file.id ? { ...f, status: 'error', error: error instanceof Error ? error.message : 'Upload failed' } : f
       ));
       toast.error(`${file.name} ${language === 'zh' ? '上传失败！' : 'upload failed!'}`);
     }

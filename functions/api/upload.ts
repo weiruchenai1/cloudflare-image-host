@@ -30,12 +30,14 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     
     // 解析文件数据
     const formData = await request.formData();
-    const file = formData.get('file') as File;
+    const fileData = formData.get('file');
     const folderId = formData.get('folderId') as string;
     
-    if (!file) {
-      return new Response('No file provided', { status: 400 });
+    if (!fileData || typeof fileData !== 'object') {
+      return new Response('No file provided or invalid file', { status: 400 });
     }
+
+    const file = fileData as unknown as File;
 
     // 检查存储配额
     if (user.storageUsed + file.size > user.storageQuota) {

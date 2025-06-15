@@ -1,3 +1,4 @@
+// src/components/Layout/Header.tsx
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -58,7 +59,8 @@ const Header: React.FC = () => {
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (searchQuery.trim()) {
-      navigate(`/files?search=${encodeURIComponent(searchQuery)}`);
+      // 导航到文件页面并传递搜索参数
+      navigate(`/files?search=${encodeURIComponent(searchQuery.trim())}`);
       setSearchQuery('');
     }
   };
@@ -313,4 +315,3 @@ const Header: React.FC = () => {
 };
 
 export default Header;
-

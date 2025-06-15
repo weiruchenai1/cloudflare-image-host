@@ -1,9 +1,11 @@
+// src/pages/UploadPage.tsx
 import React, { useCallback, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useDropzone, FileRejection } from 'react-dropzone';
 import { Upload, FileType, CheckCircle, AlertCircle, X, Folder, Tag } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useAppStore } from '../store/useAppStore';
+import { useFiles, useFolders } from '../hooks/useFiles';
 
 interface UploadFile extends File {
   id: string;
@@ -15,6 +17,8 @@ interface UploadFile extends File {
 
 const UploadPage: React.FC = () => {
   const { language } = useAppStore();
+  const { uploadFile, isUploading } = useFiles();
+  const { folders, createFolder } = useFolders();
   const [files, setFiles] = useState<UploadFile[]>([]);
   const [selectedFolder, setSelectedFolder] = useState('');
   const [tags, setTags] = useState('');
@@ -35,83 +39,43 @@ const UploadPage: React.FC = () => {
     setFiles((prev: UploadFile[]) => [...prev, ...newFiles]);
     
     // 开始上传
-    newFiles.forEach(uploadFile);
+    newFiles.forEach(handleUploadFile);
   }, [language]);
 
-  const uploadFile = async (file: UploadFile) => {
+  const handleUploadFile = async (file: UploadFile) => {
     setFiles((prev: UploadFile[]) => prev.map((f: UploadFile) =>
       f.id === file.id ? { ...f, status: 'uploading' } : f
     ));
 
     try {
-      const formData = new FormData();
-      formData.append('file', file);
-      if (selectedFolder) formData.append('folderId', selectedFolder);
-      if (tags) formData.append('tags', tags);
-
-      const xhr = new XMLHttpRequest();
-      
-      xhr.upload.onprogress = (e) => {
-        if (e.lengthComputable) {
-          const progress = Math.round((e.loaded / e.total) * 100);
-          setFiles((prev: UploadFile[]) => prev.map((f: UploadFile) =>
-            f.id === file.id ? { ...f, progress } : f
-          ));
-        }
-      };
-
-      xhr.onload = () => {
-        console.log('Upload response status:', xhr.status);
-        console.log('Upload response text:', xhr.responseText);
-        
-        if (xhr.status === 200) {
-          try {
-            const response = JSON.parse(xhr.responseText);
-            if (response.success) {
-              setFiles((prev: UploadFile[]) => prev.map((f: UploadFile) =>
-                f.id === file.id
-                  ? { ...f, status: 'success', progress: 100, url: response.file.url }
-                  : f
-              ));
-              toast.success(`${file.name} ${language === 'zh' ? '上传成功！' : 'uploaded successfully!'}`);
-            } else {
-              throw new Error(response.message || 'Upload failed');
-            }
-          } catch (parseError) {
-            console.error('Parse error:', parseError);
-            setFiles((prev: UploadFile[]) => prev.map((f: UploadFile) =>
-              f.id === file.id ? { ...f, status: 'error', error: 'Invalid response format' } : f
-            ));
-            toast.error(`${file.name} ${language === 'zh' ? '上传失败！' : 'upload failed!'}`);
-          }
-        } else {
-          const errorMessage = `HTTP ${xhr.status}: ${xhr.statusText}`;
-          setFiles((prev: UploadFile[]) => prev.map((f: UploadFile) =>
-            f.id === file.id ? { ...f, status: 'error', error: errorMessage } : f
-          ));
-          toast.error(`${file.name} ${language === 'zh' ? '上传失败！' : 'upload failed!'}`);
-        }
-      };
-
-      xhr.onerror = () => {
+      // 模拟进度更新
+      const progressInterval = setInterval(() => {
         setFiles((prev: UploadFile[]) => prev.map((f: UploadFile) =>
-          f.id === file.id ? { ...f, status: 'error', error: 'Network error' } : f
+          f.id === file.id && f.status === 'uploading' 
+            ? { ...f, progress: Math.min(f.progress + Math.random() * 30, 90) } 
+            : f
         ));
-        toast.error(`${file.name} ${language === 'zh' ? '上传失败！' : 'upload failed!'}`);
-      };
+      }, 500);
 
-      const token = localStorage.getItem('token');
-      xhr.open('POST', '/api/upload');
-      if (token) {
-        xhr.setRequestHeader('Authorization', `Bearer ${token}`);
-      }
-      xhr.send(formData);
-    } catch (error) {
-      console.error('Upload error:', error);
+      await uploadFile({
+        file,
+        folderId: selectedFolder || undefined,
+        tags: tags || undefined
+      });
+
+      clearInterval(progressInterval);
+      
       setFiles((prev: UploadFile[]) => prev.map((f: UploadFile) =>
-        f.id === file.id ? { ...f, status: 'error', error: error instanceof Error ? error.message : 'Upload failed' } : f
+        f.id === file.id 
+          ? { ...f, status: 'success', progress: 100 }
+          : f
       ));
-      toast.error(`${file.name} ${language === 'zh' ? '上传失败！' : 'upload failed!'}`);
+    } catch (error: any) {
+      setFiles((prev: UploadFile[]) => prev.map((f: UploadFile) =>
+        f.id === file.id 
+          ? { ...f, status: 'error', error: error.message }
+          : f
+      ));
     }
   };
 
@@ -123,7 +87,7 @@ const UploadPage: React.FC = () => {
     setFiles((prev: UploadFile[]) => prev.map((f: UploadFile) =>
       f.id === file.id ? { ...f, status: 'pending', progress: 0, error: undefined } : f
     ));
-    uploadFile(file);
+    handleUploadFile(file);
   };
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -139,10 +103,10 @@ const UploadPage: React.FC = () => {
     multiple: true
   });
 
-  const handleSelectFolder = () => {
-    const folderName = prompt(language === 'zh' ? '请输入文件夹路径（留空为根目录）：' : 'Enter folder path (leave empty for root):');
-    if (folderName !== null) {
-      setSelectedFolder(folderName);
+  const handleCreateFolder = () => {
+    const folderName = prompt(language === 'zh' ? '请输入文件夹名称：' : 'Enter folder name:');
+    if (folderName?.trim()) {
+      createFolder({ name: folderName.trim() });
     }
   };
 
@@ -233,20 +197,27 @@ const UploadPage: React.FC = () => {
             {language === 'zh' ? '上传到文件夹' : 'Upload to Folder'}
           </h3>
           
-          <div className="flex items-center space-x-2">
-            <input
-              type="text"
-              value={selectedFolder}
-              onChange={(e) => setSelectedFolder(e.target.value)}
-              placeholder={language === 'zh' ? '根目录' : 'Root Directory'}
-              className="flex-1 px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white"
-            />
-            <button
-              onClick={handleSelectFolder}
-              className="px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors"
-            >
-              {language === 'zh' ? '选择' : 'Select'}
-            </button>
+          <div className="space-y-3">
+            <div className="flex items-center space-x-2">
+              <select
+                value={selectedFolder}
+                onChange={(e) => setSelectedFolder(e.target.value)}
+                className="flex-1 px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white"
+              >
+                <option value="">{language === 'zh' ? '根目录' : 'Root Directory'}</option>
+                {folders.map((folder: any) => (
+                  <option key={folder.id} value={folder.id}>
+                    {folder.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={handleCreateFolder}
+                className="px-3 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors"
+              >
+                {language === 'zh' ? '新建' : 'New'}
+              </button>
+            </div>
           </div>
         </div>
 
@@ -344,23 +315,12 @@ const UploadPage: React.FC = () => {
                   </div>
                 )}
 
-                {/* 成功状态显示链接 */}
-                {file.status === 'success' && file.url && (
+                {/* 成功状态 */}
+                {file.status === 'success' && (
                   <div className="mt-2 p-2 bg-green-50 dark:bg-green-900/20 rounded">
                     <p className="text-sm text-green-700 dark:text-green-300">
-                      {language === 'zh' ? '上传成功！文件链接：' : 'Upload successful! File URL:'}
+                      {language === 'zh' ? '上传成功！' : 'Upload successful!'}
                     </p>
-                    <div className="flex items-center space-x-2 mt-1">
-                      <code className="text-xs text-green-600 dark:text-green-400 break-all flex-1">
-                        {file.url}
-                      </code>
-                      <button
-                        onClick={() => navigator.clipboard.writeText(file.url!)}
-                        className="text-xs bg-green-100 hover:bg-green-200 text-green-700 px-2 py-1 rounded"
-                      >
-                        {language === 'zh' ? '复制' : 'Copy'}
-                      </button>
-                    </div>
                   </div>
                 )}
               </motion.div>

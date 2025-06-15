@@ -1,5 +1,7 @@
+// src/pages/DashboardPage.tsx
 import React from 'react';
 import { motion } from 'framer-motion';
+import { Link } from 'react-router-dom';
 import {
   Upload,
   FolderOpen,
@@ -10,36 +12,48 @@ import {
   FileText
 } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
+import { useDashboardStats, useUserStats } from '../hooks/useStats';
+import Loading from '../components/Loading';
 
 const DashboardPage: React.FC = () => {
   const { user, language } = useAppStore();
+  const { data: dashboardStats, isLoading: isDashboardLoading } = useDashboardStats();
+  const { data: userStats, isLoading: isUserLoading } = useUserStats();
+
+  if (isDashboardLoading || isUserLoading) {
+    return <Loading text={language === 'zh' ? '加载统计数据...' : 'Loading statistics...'} />;
+  }
+
+  // 安全地访问数据，提供默认值
+  const statsData = dashboardStats as any || {};
+  const userStatsData = userStats as any || {};
 
   const stats = [
     {
       title: language === 'zh' ? '总存储' : 'Total Storage',
-      value: '85.2 GB',
-      change: '+12%',
+      value: `${((userStatsData.storageUsed || 0) / 1024 / 1024 / 1024).toFixed(1)} GB`,
+      change: statsData.storageGrowth || '+0%',
       icon: HardDrive,
       color: 'from-blue-500 to-blue-600'
     },
     {
       title: language === 'zh' ? '文件数量' : 'Files Count',
-      value: '1,284',
-      change: '+8%',
+      value: (statsData.totalFiles || 0).toString(),
+      change: statsData.filesGrowth || '+0%',
       icon: FileText,
       color: 'from-green-500 to-green-600'
     },
     {
       title: language === 'zh' ? '分享链接' : 'Share Links',
-      value: '156',
-      change: '+23%',
+      value: (statsData.totalShares || 0).toString(),
+      change: statsData.sharesGrowth || '+0%',
       icon: Share,
       color: 'from-purple-500 to-purple-600'
     },
     {
       title: language === 'zh' ? '今日访问' : 'Today Views',
-      value: '2,847',
-      change: '+15%',
+      value: (statsData.todayViews || 0).toString(),
+      change: statsData.viewsGrowth || '+0%',
       icon: Activity,
       color: 'from-orange-500 to-orange-600'
     }
@@ -68,6 +82,10 @@ const DashboardPage: React.FC = () => {
       color: 'from-pink-500 to-rose-600'
     }
   ];
+
+  const storageUsedGB = (userStatsData.storageUsed || 0) / 1024 / 1024 / 1024;
+  const storageQuotaGB = (userStatsData.storageQuota || 0) / 1024 / 1024 / 1024;
+  const storagePercentage = storageQuotaGB > 0 ? (storageUsedGB / storageQuotaGB) * 100 : 0;
 
   return (
     <div className="space-y-8">
@@ -143,26 +161,29 @@ const DashboardPage: React.FC = () => {
           {quickActions.map((action, index) => {
             const Icon = action.icon;
             return (
-              <motion.a
+              <motion.div
                 key={action.title}
-                href={action.href}
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.3 + index * 0.1 }}
                 whileHover={{ y: -4, scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
-                className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-md rounded-xl p-6 border border-gray-200/50 dark:border-gray-700/50 shadow-lg hover:shadow-xl transition-all duration-300 group cursor-pointer"
               >
-                <div className={`w-16 h-16 rounded-xl bg-gradient-to-r ${action.color} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300`}>
-                  <Icon className="w-8 h-8 text-white" />
-                </div>
-                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
-                  {action.title}
-                </h3>
-                <p className="text-gray-600 dark:text-gray-400">
-                  {action.description}
-                </p>
-              </motion.a>
+                <Link
+                  to={action.href}
+                  className="block bg-white/70 dark:bg-gray-800/70 backdrop-blur-md rounded-xl p-6 border border-gray-200/50 dark:border-gray-700/50 shadow-lg hover:shadow-xl transition-all duration-300 group cursor-pointer"
+                >
+                  <div className={`w-16 h-16 rounded-xl bg-gradient-to-r ${action.color} flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300`}>
+                    <Icon className="w-8 h-8 text-white" />
+                  </div>
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+                    {action.title}
+                  </h3>
+                  <p className="text-gray-600 dark:text-gray-400">
+                    {action.description}
+                  </p>
+                </Link>
+              </motion.div>
             );
           })}
         </div>
@@ -181,24 +202,27 @@ const DashboardPage: React.FC = () => {
         
         <div className="flex items-center justify-between mb-2">
           <span className="text-gray-600 dark:text-gray-400">
-            {language === 'zh' ? '已使用' : 'Used'}: 85.2 GB
+            {language === 'zh' ? '已使用' : 'Used'}: {storageUsedGB.toFixed(2)} GB
           </span>
           <span className="text-gray-600 dark:text-gray-400">
-            {language === 'zh' ? '总容量' : 'Total'}: 100 GB
+            {language === 'zh' ? '总容量' : 'Total'}: {storageQuotaGB.toFixed(0)} GB
           </span>
         </div>
         
         <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 mb-4">
           <motion.div
             initial={{ width: 0 }}
-            animate={{ width: '85.2%' }}
+            animate={{ width: `${Math.min(storagePercentage, 100)}%` }}
             transition={{ duration: 1, ease: "easeOut" }}
             className="bg-gradient-to-r from-blue-500 to-purple-600 h-3 rounded-full"
           />
         </div>
         
         <p className="text-sm text-gray-500 dark:text-gray-400">
-          {language === 'zh' ? '您还有 14.8 GB 可用空间' : 'You have 14.8 GB available space'}
+          {language === 'zh' 
+            ? `您还有 ${(storageQuotaGB - storageUsedGB).toFixed(2)} GB 可用空间` 
+            : `You have ${(storageQuotaGB - storageUsedGB).toFixed(2)} GB available space`
+          }
         </p>
       </motion.div>
     </div>

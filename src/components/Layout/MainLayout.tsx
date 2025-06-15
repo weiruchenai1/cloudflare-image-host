@@ -1,3 +1,4 @@
+// src/components/Layout/MainLayout.tsx
 import React, { useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Outlet } from 'react-router-dom';
@@ -27,21 +28,27 @@ const MainLayout: React.FC = () => {
       <BackgroundContainer />
       
       <div className="flex h-screen">
-        <AnimatePresence>
+        <AnimatePresence mode="wait">
           {!sidebarCollapsed && (
             <motion.div
-              initial={{ x: -280 }}
-              animate={{ x: 0 }}
-              exit={{ x: -280 }}
-              transition={{ type: "spring", damping: 20 }}
-              className="w-70 bg-white/80 dark:bg-gray-800/80 backdrop-blur-md border-r border-gray-200 dark:border-gray-700"
+              key="sidebar-expanded"
+              initial={{ x: -280, opacity: 0 }}
+              animate={{ x: 0, opacity: 1 }}
+              exit={{ x: -280, opacity: 0 }}
+              transition={{ 
+                type: "spring", 
+                damping: 25, 
+                stiffness: 200,
+                duration: 0.3
+              }}
+              className="w-70 bg-white/80 dark:bg-gray-800/80 backdrop-blur-md border-r border-gray-200 dark:border-gray-700 flex-shrink-0"
             >
               <Sidebar />
             </motion.div>
           )}
         </AnimatePresence>
 
-        <div className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 flex flex-col overflow-hidden min-w-0">
           <Header />
           
           <main className="flex-1 overflow-auto p-6">

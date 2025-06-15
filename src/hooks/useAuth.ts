@@ -1,3 +1,4 @@
+// src/hooks/useAuth.ts
 import { useEffect } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { api } from '../utils/api';
@@ -9,19 +10,21 @@ export const useAuth = () => {
     const token = localStorage.getItem('token');
     if (token && !isAuthenticated) {
       api.setToken(token);
-      // 验证token有效性
       validateToken();
     }
-  }, []);
+  }, [isAuthenticated]);
 
   const validateToken = async () => {
     try {
-      const response = await api.request<{ user?: any }>('/auth/validate');
+      const response = await api.validateToken() as { user?: any };
       if (response.user) {
         setUser(response.user);
         setAuthenticated(true);
+      } else {
+        logout();
       }
     } catch (error) {
+      console.error('Token validation failed:', error);
       logout();
     }
   };
@@ -63,5 +66,6 @@ export const useAuth = () => {
     login,
     register,
     logout: handleLogout,
+    validateToken,
   };
 };

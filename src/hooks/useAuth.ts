@@ -10,16 +10,6 @@ interface User {
   role: string;
 }
 
-interface RegisterResponse {
-  token: string;
-  user: {
-    id: string;
-    username: string;
-    email: string;
-    role: string;
-  };
-}
-
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(false);

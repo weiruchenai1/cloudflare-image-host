@@ -61,16 +61,35 @@ const UploadPage: React.FC = () => {
       };
 
       xhr.onload = () => {
+        console.log('Upload response status:', xhr.status);
+        console.log('Upload response text:', xhr.responseText);
+        
         if (xhr.status === 200) {
-          const response = JSON.parse(xhr.responseText);
-          setFiles((prev: UploadFile[]) => prev.map((f: UploadFile) =>
-            f.id === file.id
-              ? { ...f, status: 'success', progress: 100, url: response.file.url }
-              : f
-          ));
-          toast.success(`${file.name} ${language === 'zh' ? '上传成功！' : 'uploaded successfully!'}`);
+          try {
+            const response = JSON.parse(xhr.responseText);
+            if (response.success) {
+              setFiles((prev: UploadFile[]) => prev.map((f: UploadFile) =>
+                f.id === file.id
+                  ? { ...f, status: 'success', progress: 100, url: response.file.url }
+                  : f
+              ));
+              toast.success(`${file.name} ${language === 'zh' ? '上传成功！' : 'uploaded successfully!'}`);
+            } else {
+              throw new Error(response.message || 'Upload failed');
+            }
+          } catch (parseError) {
+            console.error('Parse error:', parseError);
+            setFiles((prev: UploadFile[]) => prev.map((f: UploadFile) =>
+              f.id === file.id ? { ...f, status: 'error', error: 'Invalid response format' } : f
+            ));
+            toast.error(`${file.name} ${language === 'zh' ? '上传失败！' : 'upload failed!'}`);
+          }
         } else {
-          throw new Error('Upload failed');
+          const errorMessage = `HTTP ${xhr.status}: ${xhr.statusText}`;
+          setFiles((prev: UploadFile[]) => prev.map((f: UploadFile) =>
+            f.id === file.id ? { ...f, status: 'error', error: errorMessage } : f
+          ));
+          toast.error(`${file.name} ${language === 'zh' ? '上传失败！' : 'upload failed!'}`);
         }
       };
 
@@ -88,8 +107,9 @@ const UploadPage: React.FC = () => {
       }
       xhr.send(formData);
     } catch (error) {
+      console.error('Upload error:', error);
       setFiles((prev: UploadFile[]) => prev.map((f: UploadFile) =>
-        f.id === file.id ? { ...f, status: 'error', error: 'Upload failed' } : f
+        f.id === file.id ? { ...f, status: 'error', error: error instanceof Error ? error.message : 'Upload failed' } : f
       ));
       toast.error(`${file.name} ${language === 'zh' ? '上传失败！' : 'upload failed!'}`);
     }
@@ -150,7 +170,6 @@ const UploadPage: React.FC = () => {
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
       >
-        {/* 修复：将 motion.div 的 whileHover 和 whileTap 移除，改用普通 div */}
         <div
           {...getRootProps()}
           className={`

@@ -15,11 +15,6 @@ interface UploadFile extends File {
   error?: string;
 }
 
-interface UploadResponse {
-  success: boolean;
-  file: FileItem;
-}
-
 const UploadZone: React.FC = () => {
   const { language } = useAppStore();
   const [files, setFiles] = useState<UploadFile[]>([]);
@@ -44,14 +39,12 @@ const UploadZone: React.FC = () => {
     ));
 
     try {
-      const response = await api.uploadFile(file) as UploadResponse;
-      
+      const response = await api.uploadFile(file);
       setFiles(prev => prev.map(f => 
         f.id === file.id 
-          ? { ...f, status: 'success', progress: 100, url: response.file.url }
+          ? { ...f, status: 'success', progress: 100, url: response.data?.url }
           : f
       ));
-      
       toast.success(`${file.name} ${language === 'zh' ? '上传成功！' : 'uploaded successfully!'}`);
     } catch (error) {
       console.error('Upload error:', error);

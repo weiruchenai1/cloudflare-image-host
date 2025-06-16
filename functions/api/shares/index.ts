@@ -27,7 +27,7 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     };
 
     // 验证文件是否存在且属于用户
-    const fileData = await env.IMAGE_HOST_KV.get(`file:${fileId}`);
+    const fileData = await env.IMAGE_HOST_KV.get(`file:${userId}:${fileId}`);
     if (!fileData) {
       return new Response('文件不存在', { status: 404 });
     }
@@ -101,7 +101,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
         const share = JSON.parse(shareData);
         
         // 获取文件信息
-        const fileData = await env.IMAGE_HOST_KV.get(`file:${share.fileId}`);
+        const fileData = await env.IMAGE_HOST_KV.get(`file:${share.userId}:${share.fileId}`);
         if (fileData) {
           const file = JSON.parse(fileData);
           share.fileName = file.originalName;

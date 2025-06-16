@@ -19,7 +19,9 @@ import {
   FileText,
   Archive,
   Calendar,
-  Edit
+  Edit,
+  Link as LinkIcon,
+  Copy
 } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import { useFiles, useFolders } from '../hooks/useFiles';
@@ -35,6 +37,7 @@ const FilesPage: React.FC = () => {
   const [showFileMenu, setShowFileMenu] = useState<string | null>(null);
   const [showShareModal, setShowShareModal] = useState<string | null>(null);
   const [showRenameModal, setShowRenameModal] = useState<string | null>(null);
+  const [showDirectLinkModal, setShowDirectLinkModal] = useState<string | null>(null);
   const [newFileName, setNewFileName] = useState('');
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -119,6 +122,11 @@ const FilesPage: React.FC = () => {
     setShowFileMenu(null);
   };
 
+  const handleDirectLinkFile = (file: any) => {
+    setShowDirectLinkModal(file.id);
+    setShowFileMenu(null);
+  };
+
   const handleDeleteFile = (file: any) => {
     if (window.confirm(language === 'zh' ? `确定要删除 ${file.originalName} 吗？` : `Are you sure you want to delete ${file.originalName}?`)) {
       deleteFile(file.id);
@@ -130,6 +138,15 @@ const FilesPage: React.FC = () => {
     setNewFileName(file.originalName);
     setShowRenameModal(file.id);
     setShowFileMenu(null);
+  };
+
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success(language === 'zh' ? '链接已复制' : 'Link copied to clipboard');
+    } catch (error) {
+      toast.error(language === 'zh' ? '复制失败' : 'Failed to copy');
+    }
   };
 
   const confirmRename = () => {
@@ -178,6 +195,24 @@ const FilesPage: React.FC = () => {
     refetch();
   };
 
+  // 生成直链访问地址
+  const generateDirectLink = (file: any) => {
+    if (!file) return '';
+    
+    // 如果有文件夹，则使用文件夹名/文件名的路径
+    // 如果没有文件夹，则直接使用文件名
+    if (file.folderId && file.folderId !== 'default') {
+      const folder = folders.find(f => f.id === file.folderId);
+      const folderName = folder ? folder.name : '';
+      if (folderName) {
+        return `${window.location.origin}/s/${folderName}/${file.originalName}`;
+      }
+    }
+    
+    // 文件在根目录
+    return `${window.location.origin}/s/${file.originalName}`;
+  };
+
   // 处理菜单按钮点击
   const handleMenuClick = (fileId: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -189,6 +224,67 @@ const FilesPage: React.FC = () => {
     e.stopPropagation();
     action();
   };
+
+  // 渲染文件菜单
+  const renderFileMenu = (file: any) => (
+    <AnimatePresence>
+      {showFileMenu === file.id && (
+        <motion.div
+          ref={menuRef}
+          initial={{ opacity: 0, scale: 0.95 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.95 }}
+          transition={{ duration: 0.1 }}
+          className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden z-10 border border-gray-200 dark:border-gray-700"
+        >
+          <div className="py-1">
+            <button
+              onClick={(e) => handleMenuItemClick(() => handlePreviewFile(file), e)}
+              className="flex items-center w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+            >
+              <Eye className="w-4 h-4 mr-2" />
+              {language === 'zh' ? '预览' : 'Preview'}
+            </button>
+            <button
+              onClick={(e) => handleMenuItemClick(() => handleDownloadFile(file), e)}
+              className="flex items-center w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+            >
+              <Download className="w-4 h-4 mr-2" />
+              {language === 'zh' ? '下载' : 'Download'}
+            </button>
+            <button
+              onClick={(e) => handleMenuItemClick(() => handleShareFile(file), e)}
+              className="flex items-center w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+            >
+              <Share className="w-4 h-4 mr-2" />
+              {language === 'zh' ? '创建分享链接' : 'Create Share'}
+            </button>
+            <button
+              onClick={(e) => handleMenuItemClick(() => handleDirectLinkFile(file), e)}
+              className="flex items-center w-full px-4 py-2 text-sm text-purple-600 dark:text-purple-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+            >
+              <LinkIcon className="w-4 h-4 mr-2" />
+              {language === 'zh' ? '直链访问' : 'Direct Link'}
+            </button>
+            <button
+              onClick={(e) => handleMenuItemClick(() => handleRenameFile(file), e)}
+              className="flex items-center w-full px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+            >
+              <Edit className="w-4 h-4 mr-2" />
+              {language === 'zh' ? '重命名' : 'Rename'}
+            </button>
+            <button
+              onClick={(e) => handleMenuItemClick(() => handleDeleteFile(file), e)}
+              className="flex items-center w-full px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700"
+            >
+              <Trash2 className="w-4 h-4 mr-2" />
+              {language === 'zh' ? '删除' : 'Delete'}
+            </button>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
 
   if (isLoading) {
     return (
@@ -371,54 +467,7 @@ const FilesPage: React.FC = () => {
                               <MoreVertical className="w-4 h-4 text-gray-600 dark:text-gray-400" />
                             </button>
                             
-                            <AnimatePresence>
-                              {showFileMenu === file.id && (
-                                <motion.div
-                                  initial={{ opacity: 0, scale: 0.95, y: -10 }}
-                                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                                  exit={{ opacity: 0, scale: 0.95, y: -10 }}
-                                  transition={{ duration: 0.1 }}
-                                  className="absolute right-0 top-full mt-1 w-36 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50"
-                                >
-                                  <button
-                                    onClick={(e) => handleMenuItemClick(() => handleRenameFile(file), e)}
-                                    className="w-full flex items-center space-x-2 px-3 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 first:rounded-t-lg transition-colors"
-                                  >
-                                    <Edit className="w-4 h-4 text-blue-600" />
-                                    <span className="text-sm text-gray-700 dark:text-gray-300">
-                                      {language === 'zh' ? '重命名' : 'Rename'}
-                                    </span>
-                                  </button>
-                                  <button
-                                    onClick={(e) => handleMenuItemClick(() => handleDownloadFile(file), e)}
-                                    className="w-full flex items-center space-x-2 px-3 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                                  >
-                                    <Download className="w-4 h-4 text-green-600" />
-                                    <span className="text-sm text-gray-700 dark:text-gray-300">
-                                      {language === 'zh' ? '下载' : 'Download'}
-                                    </span>
-                                  </button>
-                                  <button
-                                    onClick={(e) => handleMenuItemClick(() => handleShareFile(file), e)}
-                                    className="w-full flex items-center space-x-2 px-3 py-2 text-left hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
-                                  >
-                                    <Share className="w-4 h-4 text-blue-600" />
-                                    <span className="text-sm text-gray-700 dark:text-gray-300">
-                                      {language === 'zh' ? '分享' : 'Share'}
-                                    </span>
-                                  </button>
-                                  <button
-                                    onClick={(e) => handleMenuItemClick(() => handleDeleteFile(file), e)}
-                                    className="w-full flex items-center space-x-2 px-3 py-2 text-left hover:bg-red-50 dark:hover:bg-red-900/20 last:rounded-b-lg transition-colors"
-                                  >
-                                    <Trash2 className="w-4 h-4 text-red-600" />
-                                    <span className="text-sm text-red-600">
-                                      {language === 'zh' ? '删除' : 'Delete'}
-                                    </span>
-                                  </button>
-                                </motion.div>
-                              )}
-                            </AnimatePresence>
+                            {renderFileMenu(file)}
                           </div>
                         </div>
                       </div>
@@ -567,6 +616,13 @@ const FilesPage: React.FC = () => {
                                 <Share className="w-4 h-4" />
                               </button>
                               <button 
+                                onClick={() => handleDirectLinkFile(file)}
+                                className="text-purple-600 hover:text-purple-800 dark:text-purple-400 dark:hover:text-purple-300 p-1 rounded hover:bg-purple-50 dark:hover:bg-purple-900/20"
+                                title={language === 'zh' ? '直链访问' : 'Direct Link'}
+                              >
+                                <LinkIcon className="w-4 h-4" />
+                              </button>
+                              <button 
                                 onClick={() => handleDeleteFile(file)}
                                 className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 p-1 rounded hover:bg-red-50 dark:hover:bg-red-900/20"
                                 title={language === 'zh' ? '删除' : 'Delete'}
@@ -587,46 +643,124 @@ const FilesPage: React.FC = () => {
       </motion.div>
 
       {/* 重命名模态框 */}
-      {showRenameModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
+      <AnimatePresence>
+        {showRenameModal && (
           <motion.div
-            initial={{ opacity: 0, scale: 0.9 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-md"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
           >
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-              {language === 'zh' ? '重命名文件' : 'Rename File'}
-            </h3>
-            
-            <input
-              type="text"
-              value={newFileName}
-              onChange={(e) => setNewFileName(e.target.value)}
-              className="w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg text-gray-900 dark:text-white mb-4"
-              placeholder={language === 'zh' ? '输入新文件名' : 'Enter new filename'}
-              autoFocus
-            />
-            
-            <div className="flex justify-end space-x-3">
-              <button
-                onClick={() => {
-                  setShowRenameModal(null);
-                  setNewFileName('');
-                }}
-                className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
-              >
-                {language === 'zh' ? '取消' : 'Cancel'}
-              </button>
-              <button
-                onClick={confirmRename}
-                className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition-colors"
-              >
-                {language === 'zh' ? '确认' : 'Confirm'}
-              </button>
-            </div>
+            <motion.div
+              initial={{ scale: 0.95 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.95 }}
+              className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full p-6"
+            >
+              <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+                {language === 'zh' ? '重命名文件' : 'Rename File'}
+              </h3>
+              <input
+                type="text"
+                value={newFileName}
+                onChange={(e) => setNewFileName(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white mb-4"
+                placeholder={language === 'zh' ? '文件名称' : 'File name'}
+              />
+              <div className="flex justify-end space-x-3">
+                <button
+                  onClick={() => setShowRenameModal(null)}
+                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                >
+                  {language === 'zh' ? '取消' : 'Cancel'}
+                </button>
+                <button
+                  onClick={confirmRename}
+                  className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg"
+                >
+                  {language === 'zh' ? '确定' : 'Confirm'}
+                </button>
+              </div>
+            </motion.div>
           </motion.div>
-        </div>
-      )}
+        )}
+      </AnimatePresence>
+
+      {/* 直链访问模态框 */}
+      <AnimatePresence>
+        {showDirectLinkModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+          >
+            <motion.div
+              initial={{ scale: 0.95 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.95 }}
+              className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full p-6"
+            >
+              <h3 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
+                {language === 'zh' ? '直链访问' : 'Direct Link Access'}
+              </h3>
+              <p className="text-gray-600 dark:text-gray-400 mb-2">
+                {language === 'zh' ? '可以通过以下链接直接访问文件：' : 'Access your file directly via this link:'}
+              </p>
+              
+              <div className="relative mb-4">
+                <input
+                  type="text"
+                  readOnly
+                  value={generateDirectLink(files.find(f => f.id === showDirectLinkModal))}
+                  className="w-full px-4 py-2 pr-10 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none dark:bg-gray-700 dark:text-white"
+                />
+                <button
+                  onClick={() => copyToClipboard(generateDirectLink(files.find(f => f.id === showDirectLinkModal)))}
+                  className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-blue-500"
+                >
+                  <Copy className="w-5 h-5" />
+                </button>
+              </div>
+              
+              <div className="bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-700 rounded-lg p-3 mb-4">
+                <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                  {language === 'zh' 
+                    ? '注意：您需要先在分享设置中创建分享链接，或将文件设为公开才能通过直链访问。'
+                    : 'Note: You need to create a share link in sharing settings or set the file as public to access via direct link.'}
+                </p>
+              </div>
+              
+              <div className="flex justify-end space-x-3">
+                <button
+                  onClick={() => setShowDirectLinkModal(null)}
+                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                >
+                  {language === 'zh' ? '关闭' : 'Close'}
+                </button>
+                <button
+                  onClick={() => {
+                    const file = files.find(f => f.id === showDirectLinkModal);
+                    if (file) {
+                      updateFile({
+                        fileId: file.id,
+                        action: 'toggle_public',
+                        data: {}
+                      });
+                      setShowDirectLinkModal(null);
+                    }
+                  }}
+                  className="px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg"
+                >
+                  {language === 'zh' 
+                    ? (files.find(f => f.id === showDirectLinkModal)?.isPublic ? '设为私有' : '设为公开')
+                    : (files.find(f => f.id === showDirectLinkModal)?.isPublic ? 'Set Private' : 'Set Public')}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };

@@ -23,7 +23,7 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
     const { userId } = JSON.parse(tokenData);
 
     // 获取文件信息
-    const fileData = await env.IMAGE_HOST_KV.get(`file:${fileId}`);
+    const fileData = await env.IMAGE_HOST_KV.get(`file:${userId}:${fileId}`);
     if (!fileData) {
       return new Response('文件不存在', { status: 404 });
     }
@@ -45,7 +45,7 @@ export const onRequestDelete: PagesFunction<Env> = async (context) => {
     }
 
     // 删除 KV 中的文件记录
-    await env.IMAGE_HOST_KV.delete(`file:${fileId}`);
+    await env.IMAGE_HOST_KV.delete(`file:${userId}:${fileId}`);
 
     // 删除相关的分享记录
     const shareListResult = await env.IMAGE_HOST_KV.list({ prefix: `user_share:${userId}:` });
@@ -104,7 +104,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
     const { userId } = JSON.parse(tokenData);
 
     // 获取文件信息
-    const fileData = await env.IMAGE_HOST_KV.get(`file:${fileId}`);
+    const fileData = await env.IMAGE_HOST_KV.get(`file:${userId}:${fileId}`);
     if (!fileData) {
       return new Response('文件不存在', { status: 404 });
     }
@@ -137,7 +137,7 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
     file.updatedAt = new Date().toISOString();
 
     // 保存更新
-    await env.IMAGE_HOST_KV.put(`file:${fileId}`, JSON.stringify(file));
+    await env.IMAGE_HOST_KV.put(`file:${userId}:${fileId}`, JSON.stringify(file));
 
     return new Response(JSON.stringify({
       success: true,

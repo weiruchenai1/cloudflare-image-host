@@ -138,6 +138,39 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     await env.IMAGE_HOST_KV.put('system:settings', JSON.stringify(systemSettings));
     await env.IMAGE_HOST_KV.put('system:initialized', 'true');
 
+    // 创建默认文件夹
+    const defaultFolders = [
+      {
+        id: crypto.randomUUID(),
+        name: 'file',
+        parentId: null,
+        userId: adminId,
+        createdAt: new Date().toISOString(),
+        isPublic: false,
+        isDefault: true
+      },
+      {
+        id: crypto.randomUUID(),
+        name: 'images',
+        parentId: null,
+        userId: adminId,
+        createdAt: new Date().toISOString(),
+        isPublic: false
+      },
+      {
+        id: crypto.randomUUID(),
+        name: 'documents',
+        parentId: null,
+        userId: adminId,
+        createdAt: new Date().toISOString(),
+        isPublic: false
+      }
+    ];
+
+    for (const folder of defaultFolders) {
+      await env.IMAGE_HOST_KV.put(`folder:${folder.id}`, JSON.stringify(folder));
+    }
+
     return new Response(JSON.stringify({
       success: true,
       message: '系统初始化完成'

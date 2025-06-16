@@ -103,35 +103,72 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 
     // 生成文件ID和存储路径
     const fileId = crypto.randomUUID();
-    const extension = file.name.split('.').pop()?.toLowerCase() || '';
-    const fileName = `${userId}/${fileId}.${extension}`;
+    
+    // 获取文件夹路径
+    let folderPath = ''; // 默认为根目录
+    
+    if (folderId && folderId !== 'default') {
+      const folderData = await env.IMAGE_HOST_KV.get(`folder:${folderId}`);
+      if (folderData) {
+        const folder = JSON.parse(folderData);
+        folderPath = folder.name + '/';
+      }
+    }
+    
+    // 处理文件名（保留原始文件名但确保安全）
+    const safeFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_'); // 替换不安全字符
+    
+    // 检查文件名是否已存在（防止覆盖）
+    const filesResult = await env.IMAGE_HOST_KV.list({ prefix: `file:${userId}:` });
+    let uniqueFileName = safeFileName;
+    let counter = 1;
+    
+    for (const key of filesResult.keys) {
+      const existingFileData = await env.IMAGE_HOST_KV.get(key.name);
+      if (existingFileData) {
+        const existingFile = JSON.parse(existingFileData);
+        const existingFileName = existingFile.filename.split('/').pop();
+        
+        if (existingFileName === uniqueFileName) {
+          // 文件名已存在，添加序号
+          const nameParts = safeFileName.split('.');
+          const ext = nameParts.pop() || '';
+          const baseName = nameParts.join('.');
+          uniqueFileName = `${baseName}_${counter}.${ext}`;
+          counter++;
+        }
+      }
+    }
+    
+    const storagePath = `${userId}/${folderPath}${uniqueFileName}`;
     
     // 上传原文件到R2
-    await env.IMAGE_HOST_R2.put(fileName, file.stream(), {
+    await env.IMAGE_HOST_R2.put(storagePath, file.stream(), {
       httpMetadata: {
         contentType: file.type,
       },
     });
 
     // 生成文件URL（需要配置你的R2域名）
-    const fileUrl = `https://your-r2-domain.com/${fileName}`;
+    const fileUrl = `https://your-r2-domain.com/${storagePath}`;
 
     // 保存文件元数据到KV
     const fileMetadata = {
       id: fileId,
-      filename: fileName,
+      filename: storagePath,
       originalName: file.name,
       type: file.type,
       size: file.size,
       url: fileUrl,
       folderId: folderId || null,
+      folderPath: folderPath ? folderPath.slice(0, -1) : null, // 去掉末尾的斜杠
       userId,
       uploadedAt: new Date().toISOString(),
       isPublic: false,
       tags: []
     };
 
-    await env.IMAGE_HOST_KV.put(`file:${fileId}`, JSON.stringify(fileMetadata));
+    await env.IMAGE_HOST_KV.put(`file:${userId}:${fileId}`, JSON.stringify(fileMetadata));
     
     // 更新用户存储使用量
     user.storageUsed += file.size;

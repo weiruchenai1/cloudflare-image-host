@@ -50,6 +50,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   try {
     const { request, env } = context;
+    const url = new URL(request.url);
+    const getDefault = url.searchParams.get('default') === 'true';
     
     // 验证用户身份
     const authHeader = request.headers.get('Authorization');
@@ -73,11 +75,18 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       const folderData = await env.IMAGE_HOST_KV.get(key.name);
       if (folderData) {
         const folder = JSON.parse(folderData);
-        if (folder.userId === userId) {
+        // 如果请求默认文件夹，则返回所有用户的默认文件夹
+        if (getDefault && folder.isDefault) {
+          folders.push(folder);
+        } 
+        // 否则只返回当前用户的文件夹
+        else if (folder.userId === userId) {
           folders.push(folder);
         }
       }
     }
+
+    // 不再自动创建默认文件夹，允许文件存储在根目录
 
     return new Response(JSON.stringify({
       success: true,

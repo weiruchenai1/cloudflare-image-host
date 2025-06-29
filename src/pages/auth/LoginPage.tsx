@@ -4,6 +4,7 @@ import { Eye, EyeOff, LogIn, Globe } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { useAppStore } from '../../store/useAppStore';
+import { useAuth } from '../../hooks/useAuth';
 
 const LoginPage: React.FC = () => {
   const [formData, setFormData] = useState({
@@ -13,7 +14,8 @@ const LoginPage: React.FC = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   
-  const { setUser, setAuthenticated, language, setLanguage } = useAppStore();
+  const { language, setLanguage } = useAppStore();
+  const { login } = useAuth();
   const navigate = useNavigate();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -26,25 +28,11 @@ const LoginPage: React.FC = () => {
     setLoading(true);
 
     try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
-      });
-
-      const data = await response.json() as { user?: any; token?: string; message?: string };
-
-      if (response.ok) {
-        setUser(data.user);
-        setAuthenticated(true);
-        localStorage.setItem('token', data.token || '');
-        toast.success(language === 'zh' ? '登录成功！' : 'Login successful!');
-        navigate('/dashboard');
-      } else {
-        toast.error(data.message || (language === 'zh' ? '登录失败' : 'Login failed'));
-      }
-    } catch (error) {
-      toast.error(language === 'zh' ? '网络错误' : 'Network error');
+      await login(formData);
+      toast.success(language === 'zh' ? '登录成功！' : 'Login successful!');
+      navigate('/dashboard');
+    } catch (error: any) {
+      toast.error(error.message || (language === 'zh' ? '登录失败' : 'Login failed'));
     } finally {
       setLoading(false);
     }

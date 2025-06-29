@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { Settings, User, Database, Save } from 'lucide-react';
 import { toast } from 'react-hot-toast';
+import { api } from '../../utils/api';
 
 const InitSetupPage: React.FC = () => {
   const [step, setStep] = useState(1);
@@ -83,36 +84,25 @@ const InitSetupPage: React.FC = () => {
     try {
       console.log('Sending setup data:', setupData);
 
-      const response = await fetch('/api/setup', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(setupData)
+      const data = await api.setup({
+        adminUsername: setupData.adminUsername,
+        adminPassword: setupData.adminPassword,
+        siteName: setupData.siteName,
+        siteTitle: setupData.siteTitle,
+        defaultStorageQuota: setupData.defaultStorageQuota
       });
 
-      console.log('Response status:', response.status);
-      console.log('Response headers:', response.headers);
+      console.log('Response data:', data);
 
-      let data;
-      try {
-        data = await response.json() as { success?: boolean; message?: string };
-        console.log('Response data:', data);
-      } catch (jsonError) {
-        console.error('Failed to parse JSON response:', jsonError);
-        const text = await response.text();
-        console.log('Response text:', text);
-        toast.error('服务器响应格式错误');
-        return;
-      }
-
-      if (response.ok && data.success) {
+      if (data.success) {
         toast.success('初始化完成！');
         window.location.href = '/login';
       } else {
         toast.error(data.message || '初始化失败');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Setup error:', error);
-      toast.error('网络错误，请检查连接');
+      toast.error(error.message || '网络错误，请检查连接');
     }
   };
 

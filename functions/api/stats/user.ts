@@ -1,42 +1,72 @@
 // functions/api/stats/user.ts
-interface Env {
-  IMAGE_HOST_KV: KVNamespace;
-}
+import { successResponse, errorResponse } from '../../utils/response';
+import { extractUserFromRequest } from '../../utils/auth';
+import { logger } from '../../utils/logger';
+import { Env, User } from '../../types';
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
+  const requestId = (context.request as any).requestId;
+  
   try {
     const { request, env } = context;
     
-    // 验证用户身份
-    const authHeader = request.headers.get('Authorization');
-    if (!authHeader) {
-      return new Response('Unauthorized', { status: 401 });
+    // 获取用户信息
+    const userPayload = extractUserFromRequest(request);
+    if (!userPayload) {
+      return errorResponse('No user context found', 401);
     }
 
-    const token = authHeader.replace('Bearer ', '');
-    const tokenData = await env.IMAGE_HOST_KV.get(`token:${token}`);
-    if (!tokenData) {
-      return new Response('Invalid token', { status: 401 });
-    }
+    logger.debug('Getting user stats', { requestId, userId: userPayload.userId });
 
-    const { userId } = JSON.parse(tokenData);
-    const userData = await env.IMAGE_HOST_KV.get(`user:${userId}`);
+    const userData = await env.IMAGE_HOST_KV.get(`user:${userPayload.userId}`);
     if (!userData) {
-      return new Response('User not found', { status: 404 });
+      logger.warn('User not found for stats', { requestId, userId: userPayload.userId });
+      return errorResponse('User not found', 404);
     }
 
-    const user = JSON.parse(userData);
+    const user: User = JSON.parse(userData);
 
-    return new Response(JSON.stringify({
-      success: true,
-      storageUsed: user.storageUsed || 0,
-      storageQuota: user.storageQuota || 0
-    }), {
-      headers: { 'Content-Type': 'application/json' }
+    // 统计用户文件数量
+    let fileCount = 0;
+    const fileKeys = await env.IMAGE_HOST_KV.list({ prefix: `file:${user.id}:` });
+    fileCount = fileKeys.keys.length;
+
+    // 统计用户分享数量
+    let shareCount = 0;
+    const shareKeys = await env.IMAGE_HOST_KV.list({ prefix: `user_share:${user.id}:` });
+    shareCount = shareKeys.keys.length;
+
+    const stats = {
+      storage: {
+        used: user.storageUsed || 0,
+        quota: user.storageQuota || 0,
+        percentage: user.storageQuota > 0 ? ((user.storageUsed || 0) / user.storageQuota * 100) : 0
+      },
+      files: {
+        count: fileCount
+      },
+      shares: {
+        count: shareCount
+      },
+      account: {
+        createdAt: user.createdAt,
+        role: user.role,
+        isActive: user.isActive
+      }
+    };
+
+    logger.debug('User stats calculated', { 
+      requestId, 
+      userId: userPayload.userId,
+      fileCount,
+      shareCount,
+      storageUsed: user.storageUsed
     });
 
+    return successResponse(stats);
+
   } catch (error) {
-    console.error('User stats error:', error);
-    return new Response('Failed to get user stats', { status: 500 });
+    logger.error('User stats error', { requestId }, error as Error);
+    return errorResponse('Failed to get user stats', 500);
   }
 };

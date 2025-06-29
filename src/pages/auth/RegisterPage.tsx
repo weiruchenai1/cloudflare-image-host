@@ -4,6 +4,7 @@ import { Eye, EyeOff, UserPlus, Globe, Key } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import { useAppStore } from '../../store/useAppStore';
+import { useAuth } from '../../hooks/useAuth';
 
 const RegisterPage: React.FC = () => {
   const [formData, setFormData] = useState({
@@ -18,6 +19,7 @@ const RegisterPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   
   const { language, setLanguage } = useAppStore();
+  const { register } = useAuth();
   const navigate = useNavigate();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -41,22 +43,16 @@ const RegisterPage: React.FC = () => {
     setLoading(true);
 
     try {
-      const response = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
+      await register({
+        username: formData.username,
+        email: formData.email,
+        password: formData.password,
+        inviteCode: formData.inviteCode
       });
-
-      const data = await response.json() as { message?: string };
-
-      if (response.ok) {
-        toast.success(language === 'zh' ? '注册成功！请登录' : 'Registration successful! Please log in');
-        navigate('/login');
-      } else {
-        toast.error(data.message || (language === 'zh' ? '注册失败' : 'Registration failed'));
-      }
-    } catch (error) {
-      toast.error(language === 'zh' ? '网络错误' : 'Network error');
+      toast.success(language === 'zh' ? '注册成功！请登录' : 'Registration successful! Please log in');
+      navigate('/login');
+    } catch (error: any) {
+      toast.error(error.message || (language === 'zh' ? '注册失败' : 'Registration failed'));
     } finally {
       setLoading(false);
     }

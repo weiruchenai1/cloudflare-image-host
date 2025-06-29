@@ -80,6 +80,19 @@ class ApiClient {
     return this.request<{ user?: any }>('/auth/validate');
   }
 
+  async setup(data: {
+    adminUsername: string;
+    adminPassword: string;
+    siteName: string;
+    siteTitle: string;
+    defaultStorageQuota: number;
+  }) {
+    return this.request<{ success: boolean; message?: string }>('/setup', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
   // 文件相关
   async uploadFile(file: File, folderId?: string, tags?: string) {
     const formData = new FormData();

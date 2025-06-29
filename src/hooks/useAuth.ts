@@ -30,15 +30,13 @@ export const useAuth = () => {
   };
 
   const login = async (credentials: { username: string; password: string }) => {
-    try {
-      const response = await api.login(credentials) as { token: string; user: any };
+    const response = await api.login(credentials);
+    if (response.token && response.user) {
       api.setToken(response.token);
       setUser(response.user);
       setAuthenticated(true);
-      return response;
-    } catch (error) {
-      throw error;
     }
+    return response;
   };
 
   const register = async (data: {
@@ -47,12 +45,7 @@ export const useAuth = () => {
     password: string;
     inviteCode: string;
   }) => {
-    try {
-      const response = await api.register(data);
-      return response;
-    } catch (error) {
-      throw error;
-    }
+    return api.register(data);
   };
 
   const handleLogout = () => {

@@ -1,80 +1,88 @@
-interface Env {
-  IMAGE_HOST_KV: KVNamespace;
-}
-
-// --- 辅助函数开始 ---
-function str2ab(str: string) {
-  const buf = new ArrayBuffer(str.length * 2);
-  const bufView = new Uint16Array(buf);
-  for (let i = 0, strLen = str.length; i < strLen; i++) {
-    bufView[i] = str.charCodeAt(i);
-  }
-  return buf;
-}
-
-async function hashPassword(password: string): Promise<string> {
-  const salt = crypto.getRandomValues(new Uint8Array(16));
-  const keyMaterial = await crypto.subtle.importKey(
-    'raw',
-    str2ab(password),
-    { name: 'PBKDF2' },
-    false,
-    ['deriveBits']
-  );
-  const key = await crypto.subtle.deriveBits(
-    {
-      name: 'PBKDF2',
-      salt: salt,
-      iterations: 100000,
-      hash: 'SHA-256',
-    },
-    keyMaterial,
-    256
-  );
-
-  const saltB64 = btoa(String.fromCharCode(...Array.from(salt)));
-  const keyB64 = btoa(String.fromCharCode(...Array.from(new Uint8Array(key))));
-
-  return `${saltB64}:${keyB64}`;
-}
-// --- 辅助函数结束 ---
+// functions/api/auth/register.ts
+import { hashPassword } from '../../utils/crypto';
+import { successResponse, errorResponse, validationErrorResponse, conflictResponse } from '../../utils/response';
+import { validateUsername, validatePassword, validateEmail, validateInviteCode } from '../../utils/validation';
+import { getEnvConfig } from '../../utils/env';
+import { logger } from '../../utils/logger';
+import { Env, User, InviteCode } from '../../types';
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
+  const requestId = (context.request as any).requestId;
+  
   try {
     const { request, env } = context;
-    const { username, email, password, inviteCode } = await request.json() as {
+    const config = getEnvConfig(env);
+    
+    const requestData = await request.json() as {
       username: string;
-      email: string;
+      email?: string;
       password: string;
       inviteCode: string;
     };
+    
+    const { username, email, password, inviteCode } = requestData;
+
+    logger.info('Registration attempt', { requestId, username, email });
+
+    // 输入验证
+    if (!username || !password || !inviteCode) {
+      logger.warn('Missing registration fields', { requestId, username });
+      return validationErrorResponse('Username, password, and invite code are required');
+    }
+
+    if (!validateUsername(username)) {
+      logger.warn('Invalid username', { requestId, username });
+      return validationErrorResponse('Username must be 3-20 characters and contain only letters, numbers, and underscores');
+    }
+
+    if (!validatePassword(password)) {
+      logger.warn('Invalid password', { requestId, username });
+      return validationErrorResponse('Password must be at least 6 characters long');
+    }
+
+    if (email && !validateEmail(email)) {
+      logger.warn('Invalid email', { requestId, username, email });
+      return validationErrorResponse('Invalid email format');
+    }
+
+    if (!validateInviteCode(inviteCode)) {
+      logger.warn('Invalid invite code format', { requestId, username, inviteCode });
+      return validationErrorResponse('Invalid invite code format');
+    }
 
     // 验证邀请码
     const inviteData = await env.IMAGE_HOST_KV.get(`invite:${inviteCode}`);
     if (!inviteData) {
-      return new Response('邀请码无效', { status: 400 });
+      logger.warn('Invite code not found', { requestId, username, inviteCode });
+      return errorResponse('Invalid invite code', 400);
     }
 
-    const invite = JSON.parse(inviteData);
-    if (invite.isUsed) {
-      return new Response('邀请码已被使用', { status: 400 });
+    const invite: InviteCode = JSON.parse(inviteData);
+    
+    // 检查邀请码状态
+    if (invite.currentUses >= invite.maxUses) {
+      logger.warn('Invite code fully used', { requestId, username, inviteCode });
+      return errorResponse('Invite code has been fully used', 400);
     }
 
     if (invite.expiresAt && new Date(invite.expiresAt) < new Date()) {
-      return new Response('邀请码已过期', { status: 400 });
+      logger.warn('Invite code expired', { requestId, username, inviteCode });
+      return errorResponse('Invite code has expired', 400);
     }
 
     // 检查用户名是否已存在
     const existingUser = await env.IMAGE_HOST_KV.get(`user:username:${username}`);
     if (existingUser) {
-      return new Response('用户名已存在', { status: 400 });
+      logger.warn('Username already exists', { requestId, username });
+      return conflictResponse('Username already exists');
     }
 
     // 检查邮箱是否已存在
     if (email) {
       const existingEmail = await env.IMAGE_HOST_KV.get(`user:email:${email}`);
       if (existingEmail) {
-        return new Response('邮箱已被使用', { status: 400 });
+        logger.warn('Email already exists', { requestId, username, email });
+        return conflictResponse('Email already exists');
       }
     }
 
@@ -82,13 +90,13 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const userId = crypto.randomUUID();
     const hashedPassword = await hashPassword(password);
     
-    const userData = {
+    const userData: User = {
       id: userId,
       username,
       email,
       password: hashedPassword,
       role: 'user',
-      storageQuota: 5 * 1024 * 1024 * 1024, // 5GB
+      storageQuota: config.defaultStorageQuota,
       storageUsed: 0,
       createdAt: new Date().toISOString(),
       isActive: true
@@ -101,21 +109,25 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       await env.IMAGE_HOST_KV.put(`user:email:${email}`, JSON.stringify(userData));
     }
 
-    // 标记邀请码为已使用
-    invite.isUsed = true;
-    invite.usedBy = userId;
-    invite.usedAt = new Date().toISOString();
+    // 更新邀请码使用次数
+    invite.currentUses = (invite.currentUses || 0) + 1;
+    invite.usedBy = invite.usedBy || [];
+    invite.usedBy.push({
+      userId,
+      username,
+      usedAt: new Date().toISOString()
+    });
+    
     await env.IMAGE_HOST_KV.put(`invite:${inviteCode}`, JSON.stringify(invite));
 
-    return new Response(JSON.stringify({
-      success: true,
-      message: '注册成功'
-    }), {
-      headers: { 'Content-Type': 'application/json' }
+    logger.info('Registration successful', { requestId, userId, username });
+
+    return successResponse({
+      message: 'Registration successful'
     });
 
   } catch (error) {
-    console.error('Register error:', error);
-    return new Response('注册失败', { status: 500 });
+    logger.error('Registration error', { requestId }, error as Error);
+    return errorResponse('Registration failed', 500);
   }
 };

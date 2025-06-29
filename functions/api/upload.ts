@@ -1,195 +1,155 @@
-interface Env {
-  IMAGE_HOST_KV: KVNamespace;
-  IMAGE_HOST_R2: R2Bucket;
-}
+// functions/api/upload.ts
+import { successResponse, errorResponse, validationErrorResponse } from '../utils/response';
+import { validateFileType, validateFileSize, sanitizeFilename } from '../utils/validation';
+import { uploadToR2, generateFileUrl, generateStorageKey } from '../utils/storage';
+import { extractUserFromRequest } from '../utils/auth';
+import { getEnvConfig } from '../utils/env';
+import { logger } from '../utils/logger';
+import { Env, User, FileMetadata } from '../types';
+
+const ALLOWED_FILE_TYPES = [
+  'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml',
+  'video/mp4', 'video/webm', 'video/quicktime',
+  'application/pdf',
+  'application/zip', 'application/x-rar-compressed'
+];
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
+  const requestId = (context.request as any).requestId;
+  
   try {
     const { request, env } = context;
+    const config = getEnvConfig(env);
     
-    // 验证用户身份
-    const authHeader = request.headers.get('Authorization');
-    if (!authHeader) {
-      return new Response(JSON.stringify({
-        success: false,
-        message: 'Unauthorized'
-      }), { 
-        status: 401,
-        headers: { 'Content-Type': 'application/json' }
-      });
+    // 获取用户信息
+    const userPayload = extractUserFromRequest(request);
+    if (!userPayload) {
+      logger.warn('No user context found for upload', { requestId });
+      return errorResponse('No user context found', 401);
     }
 
-    const token = authHeader.replace('Bearer ', '');
-    const tokenData = await env.IMAGE_HOST_KV.get(`token:${token}`);
-    if (!tokenData) {
-      return new Response(JSON.stringify({
-        success: false,
-        message: 'Invalid token'
-      }), { 
-        status: 401,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-
-    const { userId } = JSON.parse(tokenData);
-    const userData = await env.IMAGE_HOST_KV.get(`user:${userId}`);
+    // 获取用户数据
+    const userData = await env.IMAGE_HOST_KV.get(`user:${userPayload.userId}`);
     if (!userData) {
-      return new Response(JSON.stringify({
-        success: false,
-        message: 'User not found'
-      }), { 
-        status: 404,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      logger.warn('User not found for upload', { requestId, userId: userPayload.userId });
+      return errorResponse('User not found', 404);
     }
 
-    const user = JSON.parse(userData);
-    
-    // 解析文件数据
+    const user: User = JSON.parse(userData);
+
+    logger.info('File upload started', { requestId, userId: user.id, username: user.username });
+
+    // 解析表单数据
     const formData = await request.formData();
     const file = formData.get('file') as File;
     const folderId = formData.get('folderId') as string;
+    const tags = formData.get('tags') as string;
     
     if (!file) {
-      return new Response(JSON.stringify({
-        success: false,
-        message: 'No file provided'
-      }), { 
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      logger.warn('No file provided in upload', { requestId, userId: user.id });
+      return validationErrorResponse('No file provided');
+    }
+
+    logger.debug('File upload details', {
+      requestId,
+      userId: user.id,
+      filename: file.name,
+      fileSize: file.size,
+      fileType: file.type
+    });
+
+    // 验证文件
+    if (!validateFileType(file.type, ALLOWED_FILE_TYPES)) {
+      logger.warn('Unsupported file type', { requestId, userId: user.id, fileType: file.type });
+      return validationErrorResponse('File type not supported');
+    }
+
+    if (!validateFileSize(file.size, config.maxFileSize)) {
+      logger.warn('File too large', { requestId, userId: user.id, fileSize: file.size, maxSize: config.maxFileSize });
+      return validationErrorResponse(`File size exceeds limit of ${Math.round(config.maxFileSize / 1024 / 1024)}MB`);
     }
 
     // 检查存储配额
     if (user.storageUsed + file.size > user.storageQuota) {
-      return new Response(JSON.stringify({
-        success: false,
-        message: '存储空间不足'
-      }), { 
-        status: 413,
-        headers: { 'Content-Type': 'application/json' }
+      logger.warn('Storage quota exceeded', { 
+        requestId, 
+        userId: user.id, 
+        storageUsed: user.storageUsed, 
+        storageQuota: user.storageQuota,
+        fileSize: file.size 
       });
+      return errorResponse('Storage quota exceeded', 413);
     }
 
-    // 检查文件大小和类型
-    const maxSize = 100 * 1024 * 1024; // 100MB
-    if (file.size > maxSize) {
-      return new Response(JSON.stringify({
-        success: false,
-        message: '文件过大'
-      }), { 
-        status: 413,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
+    // 处理文件名
+    const sanitizedFilename = sanitizeFilename(file.name);
+    const fileExtension = sanitizedFilename.split('.').pop() || '';
+    const timestamp = Date.now();
+    const uniqueFilename = `${timestamp}_${crypto.randomUUID().substring(0, 8)}.${fileExtension}`;
 
-    // 验证文件类型
-    const allowedTypes = [
-      'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml',
-      'video/mp4', 'video/webm', 'video/quicktime',
-      'application/pdf',
-      'application/zip', 'application/x-rar-compressed'
-    ];
-    
-    if (!allowedTypes.includes(file.type)) {
-      return new Response(JSON.stringify({
-        success: false,
-        message: '不支持的文件类型'
-      }), { 
-        status: 400,
-        headers: { 'Content-Type': 'application/json' }
-      });
-    }
-
-    // 生成文件ID和存储路径
-    const fileId = crypto.randomUUID();
-    
-    // 获取文件夹路径
-    let folderPath = ''; // 默认为根目录
-    
+    // 获取文件夹信息
+    let folderPath = '';
     if (folderId && folderId !== 'default') {
       const folderData = await env.IMAGE_HOST_KV.get(`folder:${folderId}`);
       if (folderData) {
         const folder = JSON.parse(folderData);
-        folderPath = folder.name + '/';
-      }
-    }
-    
-    // 处理文件名（保留原始文件名但确保安全）
-    const safeFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_'); // 替换不安全字符
-    
-    // 检查文件名是否已存在（防止覆盖）
-    const filesResult = await env.IMAGE_HOST_KV.list({ prefix: `file:${userId}:` });
-    let uniqueFileName = safeFileName;
-    let counter = 1;
-    
-    for (const key of filesResult.keys) {
-      const existingFileData = await env.IMAGE_HOST_KV.get(key.name);
-      if (existingFileData) {
-        const existingFile = JSON.parse(existingFileData);
-        const existingFileName = existingFile.filename.split('/').pop();
-        
-        if (existingFileName === uniqueFileName) {
-          // 文件名已存在，添加序号
-          const nameParts = safeFileName.split('.');
-          const ext = nameParts.pop() || '';
-          const baseName = nameParts.join('.');
-          uniqueFileName = `${baseName}_${counter}.${ext}`;
-          counter++;
+        if (folder.userId === user.id) {
+          folderPath = folder.name;
+          logger.debug('Upload to folder', { requestId, userId: user.id, folderId, folderPath });
         }
       }
     }
-    
-    const storagePath = `${userId}/${folderPath}${uniqueFileName}`;
-    
-    // 上传原文件到R2
-    await env.IMAGE_HOST_R2.put(storagePath, file.stream(), {
-      httpMetadata: {
-        contentType: file.type,
-      },
-    });
 
-    // 生成文件URL（需要配置你的R2域名）
-    const fileUrl = `https://your-r2-domain.com/${storagePath}`;
+    // 生成存储路径
+    const storageKey = generateStorageKey(user.id, uniqueFilename, folderPath);
+    
+    // 上传文件到 R2
+    await uploadToR2(env, file, storageKey);
+    logger.debug('File uploaded to R2', { requestId, userId: user.id, storageKey });
 
-    // 保存文件元数据到KV
-    const fileMetadata = {
+    // 生成文件 URL
+    const fileUrl = generateFileUrl(config.r2PublicDomain, storageKey);
+
+    // 创建文件元数据
+    const fileId = crypto.randomUUID();
+    const fileMetadata: FileMetadata = {
       id: fileId,
-      filename: storagePath,
+      filename: storageKey,
       originalName: file.name,
       type: file.type,
       size: file.size,
       url: fileUrl,
       folderId: folderId || null,
-      folderPath: folderPath ? folderPath.slice(0, -1) : null, // 去掉末尾的斜杠
-      userId,
+      folderPath: folderPath || null,
+      userId: user.id,
       uploadedAt: new Date().toISOString(),
       isPublic: false,
-      tags: []
+      tags: tags ? tags.split(',').map(tag => tag.trim()).filter(Boolean) : []
     };
 
-    await env.IMAGE_HOST_KV.put(`file:${userId}:${fileId}`, JSON.stringify(fileMetadata));
+    // 保存文件元数据
+    await env.IMAGE_HOST_KV.put(`file:${user.id}:${fileId}`, JSON.stringify(fileMetadata));
     
     // 更新用户存储使用量
     user.storageUsed += file.size;
-    await env.IMAGE_HOST_KV.put(`user:${userId}`, JSON.stringify(user));
+    await env.IMAGE_HOST_KV.put(`user:${user.id}`, JSON.stringify(user));
     await env.IMAGE_HOST_KV.put(`user:username:${user.username}`, JSON.stringify(user));
 
-    return new Response(JSON.stringify({
-      success: true,
-      file: fileMetadata
-    }), {
-      headers: { 'Content-Type': 'application/json' }
+    logger.info('File upload completed', { 
+      requestId, 
+      userId: user.id, 
+      fileId, 
+      filename: file.name,
+      fileSize: file.size,
+      newStorageUsed: user.storageUsed
     });
 
+    return successResponse({
+      file: fileMetadata
+    }, 'File uploaded successfully');
+
   } catch (error) {
-    console.error('Upload error:', error);
-    return new Response(JSON.stringify({
-      success: false,
-      message: '上传失败'
-    }), { 
-      status: 500,
-      headers: { 'Content-Type': 'application/json' }
-    });
+    logger.error('Upload error', { requestId }, error as Error);
+    return errorResponse('Upload failed', 500);
   }
 };

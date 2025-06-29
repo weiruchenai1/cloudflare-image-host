@@ -3,26 +3,33 @@
   "version": "1.0.0",
   "type": "module",
   "description": "A modern image hosting service built with React and Cloudflare Pages",
-  "main": "index.js",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "tsc && vite build",
     "preview": "vite preview",
     "type-check": "tsc --noEmit",
     "lint": "eslint src --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
-    "deploy": "npm run build && wrangler pages publish dist",
-    "pages:dev": "wrangler pages dev dist --compatibility-date=2023-12-01",
-    "pages:deploy": "wrangler pages deploy dist"
+    "lint:fix": "eslint src --ext ts,tsx --fix",
+    "test": "vitest",
+    "test:coverage": "vitest --coverage",
+    
+    "cf:dev": "wrangler pages dev dist --compatibility-date=2023-12-01",
+    "cf:deploy": "npm run build && npm run deploy:check && wrangler pages deploy dist",
+    "cf:deploy:staging": "npm run build && wrangler pages deploy dist --env staging",
+    "cf:deploy:production": "npm run build && npm run deploy:check && wrangler pages deploy dist --env production",
+    
+    "functions:dev": "wrangler pages functions dev",
+    "functions:deploy": "wrangler pages functions deploy",
+    
+    "setup:env": "node scripts/setup-env.js",
+    "setup:kv": "wrangler kv:namespace create IMAGE_HOST_KV && wrangler kv:namespace create IMAGE_HOST_KV --preview",
+    "setup:r2": "wrangler r2 bucket create your-image-host-bucket",
+    
+    "deploy:check": "node scripts/deploy-check.js",
+    "data:backup": "node scripts/backup-data.js",
+    "data:migrate": "node scripts/migrate-data.js",
+    "data:validate": "node scripts/validate-data.js"
   },
-  "keywords": [
-    "image-host",
-    "cloudflare",
-    "react",
-    "typescript",
-    "vite"
-  ],
-  "author": "Your Name",
-  "license": "MIT",
   "dependencies": {
     "@tanstack/react-query": "^4.36.1",
     "bcryptjs": "^2.4.3",
@@ -52,18 +59,11 @@
     "tailwindcss": "^3.3.6",
     "typescript": "^5.3.3",
     "vite": "^5.0.8",
+    "vitest": "^1.0.0",
     "wrangler": "^3.22.1"
   },
   "engines": {
     "node": ">=18.0.0",
     "npm": ">=8.0.0"
-  },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/yourusername/cloudflare-image-host.git"
-  },
-  "bugs": {
-    "url": "https://github.com/yourusername/cloudflare-image-host/issues"
-  },
-  "homepage": "https://github.com/yourusername/cloudflare-image-host#readme"
+  }
 }

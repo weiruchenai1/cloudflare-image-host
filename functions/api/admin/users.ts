@@ -1,66 +1,70 @@
-interface Env {
-  IMAGE_HOST_KV: KVNamespace;
-}
+import { successResponse, errorResponse, forbiddenResponse, validationErrorResponse } from '../../utils/response';
+import { extractUserFromRequest } from '../../utils/auth';
+import { validateStorageQuota } from '../../utils/validation';
+import { logger } from '../../utils/logger';
+import { Env, User } from '../../types';
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
+  const requestId = (context.request as any).requestId;
+  
   try {
     const { request, env } = context;
 
-    // 验证管理员权限
-    const authHeader = request.headers.get('Authorization');
-    if (!authHeader) {
-      return new Response('Unauthorized', { status: 401 });
+    // 获取用户信息并验证管理员权限
+    const userPayload = extractUserFromRequest(request);
+    if (!userPayload) {
+      return errorResponse('No user context found', 401);
     }
 
-    const token = authHeader.replace('Bearer ', '');
-    const tokenData = await env.IMAGE_HOST_KV.get(`token:${token}`);
-    if (!tokenData) {
-      return new Response('Invalid token', { status: 401 });
+    if (userPayload.role !== 'admin') {
+      logger.warn('Non-admin user attempted to access user management', { 
+        requestId, 
+        userId: userPayload.userId, 
+        role: userPayload.role 
+      });
+      return forbiddenResponse('Admin access required');
     }
 
-    const { userId } = JSON.parse(tokenData);
-    const userData = await env.IMAGE_HOST_KV.get(`user:${userId}`);
-    if (!userData) {
-      return new Response('User not found', { status: 404 });
-    }
-
-    const user = JSON.parse(userData);
-    if (user.role !== 'admin') {
-      return new Response('Forbidden', { status: 403 });
-    }
+    logger.info('Admin getting users list', { requestId, adminId: userPayload.userId });
 
     // 获取所有用户
-    const users = [];
-    const listResult = await env.IMAGE_HOST_KV.list({ prefix: 'user:' });
+    const users: User[] = [];
+    const userKeys = await env.IMAGE_HOST_KV.list({ prefix: 'user:' });
     
-    for (const key of listResult.keys) {
+    for (const key of userKeys.keys) {
       if (key.name.includes('username:') || key.name.includes('email:')) continue;
       
       const userData = await env.IMAGE_HOST_KV.get(key.name);
       if (userData) {
-        const user = JSON.parse(userData);
-        delete user.password; // 不返回密码
-        users.push(user);
+        const user: User = JSON.parse(userData);
+        // 不返回密码字段
+        const { password: _, ...userWithoutPassword } = user;
+        users.push(userWithoutPassword as User);
       }
     }
 
-    // 按创建时间排序
+    // 按创建时间倒序排序
     users.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-    return new Response(JSON.stringify({
-      success: true,
+    logger.info('Users list retrieved', { 
+      requestId, 
+      adminId: userPayload.userId, 
+      userCount: users.length 
+    });
+
+    return successResponse({
       users
-    }), {
-      headers: { 'Content-Type': 'application/json' }
     });
 
   } catch (error) {
-    console.error('Get users error:', error);
-    return new Response('获取用户列表失败', { status: 500 });
+    logger.error('Get users error', { requestId }, error as Error);
+    return errorResponse('Failed to get users list', 500);
   }
 };
 
 export const onRequestPut: PagesFunction<Env> = async (context) => {
+  const requestId = (context.request as any).requestId;
+  
   try {
     const { request, env } = context;
     const { userId: targetUserId, action, value } = await request.json() as {
@@ -69,50 +73,91 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       value?: any;
     };
 
-    // 验证管理员权限
-    const authHeader = request.headers.get('Authorization');
-    if (!authHeader) {
-      return new Response('Unauthorized', { status: 401 });
+    // 获取用户信息并验证管理员权限
+    const userPayload = extractUserFromRequest(request);
+    if (!userPayload) {
+      return errorResponse('No user context found', 401);
     }
 
-    const token = authHeader.replace('Bearer ', '');
-    const tokenData = await env.IMAGE_HOST_KV.get(`token:${token}`);
-    if (!tokenData) {
-      return new Response('Invalid token', { status: 401 });
+    if (userPayload.role !== 'admin') {
+      logger.warn('Non-admin user attempted user management', { 
+        requestId, 
+        userId: userPayload.userId, 
+        role: userPayload.role 
+      });
+      return forbiddenResponse('Admin access required');
     }
 
-    const { userId } = JSON.parse(tokenData);
-    const userData = await env.IMAGE_HOST_KV.get(`user:${userId}`);
-    if (!userData) {
-      return new Response('User not found', { status: 404 });
-    }
-
-    const user = JSON.parse(userData);
-    if (user.role !== 'admin') {
-      return new Response('Forbidden', { status: 403 });
-    }
+    logger.info('Admin updating user', { 
+      requestId, 
+      adminId: userPayload.userId, 
+      targetUserId, 
+      action, 
+      value 
+    });
 
     // 获取目标用户
     const targetUserData = await env.IMAGE_HOST_KV.get(`user:${targetUserId}`);
     if (!targetUserData) {
-      return new Response('Target user not found', { status: 404 });
+      logger.warn('Target user not found', { requestId, adminId: userPayload.userId, targetUserId });
+      return errorResponse('Target user not found', 404);
     }
 
-    const targetUser = JSON.parse(targetUserData);
+    const targetUser: User = JSON.parse(targetUserData);
+
+    // 防止管理员禁用自己
+    if (action === 'toggle_active' && targetUserId === userPayload.userId) {
+      return errorResponse('Cannot disable your own account', 400);
+    }
 
     // 执行操作
     switch (action) {
       case 'toggle_active':
         targetUser.isActive = !targetUser.isActive;
+        logger.info('User status toggled', { 
+          requestId, 
+          adminId: userPayload.userId, 
+          targetUserId, 
+          newStatus: targetUser.isActive 
+        });
         break;
+        
       case 'update_quota':
-        targetUser.storageQuota = parseInt(value);
+        const newQuota = parseInt(value);
+        if (!validateStorageQuota(newQuota)) {
+          return validationErrorResponse('Invalid storage quota');
+        }
+        targetUser.storageQuota = newQuota;
+        logger.info('User quota updated', { 
+          requestId, 
+          adminId: userPayload.userId, 
+          targetUserId, 
+          newQuota 
+        });
         break;
+        
       case 'update_role':
+        if (!['admin', 'user'].includes(value)) {
+          return validationErrorResponse('Invalid role');
+        }
+        // 防止移除最后一个管理员
+        if (targetUser.role === 'admin' && value === 'user') {
+          const adminCount = await countAdminUsers(env);
+          if (adminCount <= 1) {
+            return errorResponse('Cannot remove the last admin user', 400);
+          }
+        }
         targetUser.role = value;
+        logger.info('User role updated', { 
+          requestId, 
+          adminId: userPayload.userId, 
+          targetUserId, 
+          newRole: value 
+        });
         break;
+        
       default:
-        return new Response('Invalid action', { status: 400 });
+        return validationErrorResponse('Invalid action');
     }
 
     // 保存更新
@@ -122,15 +167,36 @@ export const onRequestPut: PagesFunction<Env> = async (context) => {
       await env.IMAGE_HOST_KV.put(`user:email:${targetUser.email}`, JSON.stringify(targetUser));
     }
 
-    return new Response(JSON.stringify({
-      success: true,
-      message: '用户更新成功'
-    }), {
-      headers: { 'Content-Type': 'application/json' }
+    logger.info('User updated successfully', { 
+      requestId, 
+      adminId: userPayload.userId, 
+      targetUserId, 
+      action 
+    });
+
+    return successResponse({
+      message: 'User updated successfully'
     });
 
   } catch (error) {
-    console.error('Update user error:', error);
-    return new Response('更新用户失败', { status: 500 });
+    logger.error('Update user error', { requestId }, error as Error);
+    return errorResponse('Failed to update user', 500);
   }
 };
+
+async function countAdminUsers(env: Env): Promise<number> {
+  let count = 0;
+  const userKeys = await env.IMAGE_HOST_KV.list({ prefix: 'user:' });
+  
+  for (const key of userKeys.keys) {
+    if (key.name.includes('username:') || key.name.includes('email:')) continue;
+    
+    const userData = await env.IMAGE_HOST_KV.get(key.name);
+    if (userData) {
+      const user: User = JSON.parse(userData);
+      if (user.role === 'admin') count++;
+    }
+  }
+  
+  return count;
+}

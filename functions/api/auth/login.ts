@@ -1,111 +1,87 @@
-interface Env {
-  IMAGE_HOST_KV: KVNamespace;
-}
-
-// --- 辅助函数开始 ---
-function str2ab(str: string) {
-  const buf = new ArrayBuffer(str.length * 2);
-  const bufView = new Uint16Array(buf);
-  for (let i = 0, strLen = str.length; i < strLen; i++) {
-    bufView[i] = str.charCodeAt(i);
-  }
-  return buf;
-}
-
-async function verifyPassword(password: string, hash: string): Promise<boolean> {
-  try {
-    const [saltB64, keyB64] = hash.split(':');
-    if (!saltB64 || !keyB64) return false;
-    const salt = Uint8Array.from(atob(saltB64), c => c.charCodeAt(0));
-    const key = Uint8Array.from(atob(keyB64), c => c.charCodeAt(0));
-
-    const keyMaterial = await crypto.subtle.importKey(
-      'raw',
-      str2ab(password),
-      { name: 'PBKDF2' },
-      false,
-      ['deriveBits']
-    );
-    const derivedKeyBuffer = await crypto.subtle.deriveBits(
-      {
-        name: 'PBKDF2',
-        salt: salt,
-        iterations: 100000,
-        hash: 'SHA-256',
-      },
-      keyMaterial,
-      256
-    );
-
-    const derivedKey = new Uint8Array(derivedKeyBuffer);
-    // 👇 手动实现安全的比较
-    if (derivedKey.length !== key.length) {
-      return false;
-    }
-    let diff = 0;
-    for (let i = 0; i < derivedKey.length; i++) {
-      diff |= derivedKey[i] ^ key[i];
-    }
-
-    return diff === 0;
-  } catch (e) {
-    console.error("Password verification error:", e);
-    return false;
-  }
-}
-// --- 辅助函数结束 ---
+// functions/api/auth/login.ts
+import { verifyPassword } from '../../utils/crypto';
+import { generateJWT } from '../../utils/auth';
+import { successResponse, errorResponse, validationErrorResponse } from '../../utils/response';
+import { validateUsername, validatePassword } from '../../utils/validation';
+import { getEnvConfig } from '../../utils/env';
+import { logger } from '../../utils/logger';
+import { Env, User } from '../../types';
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
+  const requestId = (context.request as any).requestId;
+  
   try {
     const { request, env } = context;
-    const { username, password } = await request.json() as { username: string; password: string };
+    const config = getEnvConfig(env);
+    
+    const requestData = await request.json() as {
+      username: string;
+      password: string;
+    };
+    
+    const { username, password } = requestData;
+
+    logger.info('Login attempt', { requestId, username });
+
+    // 输入验证
+    if (!username || !password) {
+      logger.warn('Missing login credentials', { requestId, username });
+      return validationErrorResponse('Username and password are required');
+    }
+
+    if (!validateUsername(username)) {
+      logger.warn('Invalid username format', { requestId, username });
+      return validationErrorResponse('Invalid username format');
+    }
+
+    if (!validatePassword(password)) {
+      logger.warn('Invalid password format', { requestId, username });
+      return validationErrorResponse('Invalid password format');
+    }
 
     // 查找用户
     const userData = await env.IMAGE_HOST_KV.get(`user:username:${username}`);
     if (!userData) {
-      return new Response('用户不存在', { status: 401 });
+      logger.warn('User not found', { requestId, username });
+      return errorResponse('Invalid credentials', 401);
     }
 
-    const user = JSON.parse(userData);
+    const user: User = JSON.parse(userData);
 
-    // 使用新的、安全的密码验证函数
+    // 验证密码
     const isPasswordValid = await verifyPassword(password, user.password);
-
     if (!isPasswordValid) {
-      return new Response('密码错误', { status: 401 });
+      logger.warn('Invalid password', { requestId, username, userId: user.id });
+      return errorResponse('Invalid credentials', 401);
     }
 
+    // 检查账户状态
     if (!user.isActive) {
-      return new Response('账户已被禁用', { status: 403 });
+      logger.warn('Account disabled', { requestId, username, userId: user.id });
+      return errorResponse('Account is disabled', 403);
     }
 
-    // 生成访问令牌
-    const token = crypto.randomUUID();
-    const tokenData = {
+    // 生成 JWT token
+    const tokenPayload = {
       userId: user.id,
       username: user.username,
-      role: user.role,
-      createdAt: new Date().toISOString()
+      role: user.role
     };
 
-    // 保存令牌 (24小时过期)
-    await env.IMAGE_HOST_KV.put(`token:${token}`, JSON.stringify(tokenData), {
-      expirationTtl: 24 * 60 * 60 // 24小时
-    });
+    const token = await generateJWT(tokenPayload, config.jwtSecret, config.sessionExpireHours);
 
-    // 移除密码字段
-    delete user.password;
+    // 返回用户信息（不包含密码）
+    const { password: _, ...userWithoutPassword } = user;
 
-    return new Response(JSON.stringify({
-      success: true,
-      user,
+    logger.info('Login successful', { requestId, userId: user.id, username });
+
+    return successResponse({
+      user: userWithoutPassword,
       token
-    }), {
-      headers: { 'Content-Type': 'application/json' }
-    });
+    }, 'Login successful');
 
   } catch (error) {
-    console.error('Login error:', error);
-    return new Response('登录失败', { status: 500 });
+    logger.error('Login error', { requestId }, error as Error);
+    return errorResponse('Login failed', 500);
   }
 };

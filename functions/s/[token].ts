@@ -1,22 +1,26 @@
-interface Env {
-  IMAGE_HOST_KV: KVNamespace;
-  IMAGE_HOST_R2: R2Bucket;
-}
+// functions/s/[token].ts - 分享访问页面
+import { getFromR2 } from '../utils/storage';
+import { logger } from '../utils/logger';
+import { Env, ShareLink, FileMetadata, User } from '../types';
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
+  const requestId = crypto.randomUUID().substring(0, 8);
+  
   try {
     const { request, env, params } = context;
     const token = params.token as string;
     const url = new URL(request.url);
     const password = url.searchParams.get('password');
     
+    logger.info('Share access attempt', { requestId, token });
+
     // 解析路径，检查是否是直链访问
     const path = decodeURIComponent(url.pathname);
     const pathParts = path.split('/').filter(Boolean);
     
     // 如果只有一个路径部分，使用原有的token逻辑
-    if (pathParts.length === 1) {
-      return handleTokenAccess(token, password, env, request);
+    if (pathParts.length === 2 && pathParts[0] === 's') {
+      return handleTokenAccess(token, password, env, request, requestId);
     } else {
       // 处理直链访问
       // 可能是 /s/{文件名} 或 /s/{文件夹名}/{文件名}
@@ -26,37 +30,41 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
         
       const folderName = pathParts.length > 2 ? pathParts[1] : null;
       
-      return handleDirectAccess(folderName, fileName, password, env, request);
+      return handleDirectAccess(folderName, fileName, password, env, request, requestId);
     }
   } catch (error) {
-    console.error('Share access error:', error);
-    return new Response('访问失败', { status: 500 });
+    logger.error('Share access error', { requestId }, error as Error);
+    return new Response('Access failed', { status: 500 });
   }
 };
 
 // 处理基于token的文件访问
-async function handleTokenAccess(token: string, password: string | null, env: Env, request: Request) {
+async function handleTokenAccess(token: string, password: string | null, env: Env, request: Request, requestId: string) {
   // 获取分享信息
   const shareData = await env.IMAGE_HOST_KV.get(`share:${token}`);
   if (!shareData) {
-    return new Response('分享不存在', { status: 404 });
+    logger.warn('Share not found', { requestId, token });
+    return new Response('Share not found', { status: 404 });
   }
 
-  const share = JSON.parse(shareData);
+  const share: ShareLink = JSON.parse(shareData);
 
   // 检查分享是否有效
   if (!share.isActive) {
-    return new Response('分享已禁用', { status: 403 });
+    logger.warn('Share disabled', { requestId, token });
+    return new Response('Share is disabled', { status: 403 });
   }
 
   // 检查过期时间
   if (share.expiresAt && new Date(share.expiresAt) < new Date()) {
-    return new Response('分享已过期', { status: 410 });
+    logger.warn('Share expired', { requestId, token });
+    return new Response('Share has expired', { status: 410 });
   }
 
   // 检查访问次数限制
   if (share.maxViews && share.currentViews >= share.maxViews) {
-    return new Response('访问次数已达上限', { status: 410 });
+    logger.warn('Share view limit reached', { requestId, token });
+    return new Response('View limit reached', { status: 410 });
   }
 
   // 检查密码
@@ -67,23 +75,55 @@ async function handleTokenAccess(token: string, password: string | null, env: En
         headers: { 'Content-Type': 'text/html; charset=utf-8' }
       });
     } else {
-      return new Response('密码错误', { status: 401 });
+      logger.warn('Wrong share password', { requestId, token });
+      return new Response('Wrong password', { status: 401 });
     }
   }
 
   // 获取文件信息
-  const fileData = await env.IMAGE_HOST_KV.get(`file:${share.userId}:${share.fileId}`);
-  if (!fileData) {
-    return new Response('文件不存在', { status: 404 });
+  const fileKeys = await env.IMAGE_HOST_KV.list({ prefix: 'file:' });
+  let file: FileMetadata | null = null;
+  
+  for (const key of fileKeys.keys) {
+    const fileData = await env.IMAGE_HOST_KV.get(key.name);
+    if (fileData) {
+      const f: FileMetadata = JSON.parse(fileData);
+      if (f.id === share.fileId) {
+        file = f;
+        break;
+      }
+    }
   }
 
-  const file = JSON.parse(fileData);
+  if (!file) {
+    logger.warn('File not found for share', { requestId, token, fileId: share.fileId });
+    return new Response('File not found', { status: 404 });
+  }
 
   // 更新访问次数
   share.currentViews += 1;
-  share.lastAccessAt = new Date().toISOString();
   await env.IMAGE_HOST_KV.put(`share:${token}`, JSON.stringify(share));
-  await env.IMAGE_HOST_KV.put(`user_share:${share.userId}:${share.id}`, JSON.stringify(share));
+  
+  // 同时更新用户分享记录
+  const userShareKeys = await env.IMAGE_HOST_KV.list({ prefix: `user_share:${file.userId}:` });
+  for (const key of userShareKeys.keys) {
+    const userShareData = await env.IMAGE_HOST_KV.get(key.name);
+    if (userShareData) {
+      const userShare: ShareLink = JSON.parse(userShareData);
+      if (userShare.token === token) {
+        userShare.currentViews = share.currentViews;
+        await env.IMAGE_HOST_KV.put(key.name, JSON.stringify(userShare));
+        break;
+      }
+    }
+  }
+
+  logger.info('Share accessed successfully', { 
+    requestId, 
+    token, 
+    fileId: file.id, 
+    views: share.currentViews 
+  });
 
   // 根据文件类型返回内容
   if (file.type.startsWith('image/')) {
@@ -92,9 +132,9 @@ async function handleTokenAccess(token: string, password: string | null, env: En
     });
   } else {
     // 直接返回文件
-    const fileObj = await env.IMAGE_HOST_R2.get(file.filename);
+    const fileObj = await getFromR2(env, file.filename);
     if (!fileObj) {
-      return new Response('文件数据不存在', { status: 404 });
+      return new Response('File data not found', { status: 404 });
     }
 
     return new Response(fileObj.body, {
@@ -108,114 +148,91 @@ async function handleTokenAccess(token: string, password: string | null, env: En
 }
 
 // 处理直链访问
-async function handleDirectAccess(folderName: string | null, fileName: string, password: string | null, env: Env, request: Request) {
-  // 获取用户列表
-  const userListResult = await env.IMAGE_HOST_KV.list({ prefix: `user:` });
-  let targetFile = null;
-  let directShareId = null;
+async function handleDirectAccess(folderName: string | null, fileName: string, password: string | null, env: Env, request: Request, requestId: string) {
+  logger.info('Direct access attempt', { requestId, folderName, fileName });
   
-  // 对每个用户进行检查
-  for (const userKey of userListResult.keys) {
-    if (!userKey.name.startsWith('user:username:')) { // 跳过用户名索引
-      const userId = userKey.name.replace('user:', '');
+  // 获取所有文件，查找匹配的文件
+  const fileKeys = await env.IMAGE_HOST_KV.list({ prefix: 'file:' });
+  let targetFile: FileMetadata | null = null;
+  
+  for (const key of fileKeys.keys) {
+    const fileData = await env.IMAGE_HOST_KV.get(key.name);
+    if (fileData) {
+      const file: FileMetadata = JSON.parse(fileData);
       
-      // 查找文件
-      const filesResult = await env.IMAGE_HOST_KV.list({ prefix: `file:${userId}:` });
+      const isMatch = folderName
+        ? file.originalName === fileName && file.folderPath === folderName
+        : file.originalName === fileName && !file.folderPath;
       
-      for (const fileKey of filesResult.keys) {
-        const fileData = await env.IMAGE_HOST_KV.get(fileKey.name);
-        if (fileData) {
-          const file = JSON.parse(fileData);
-          
-          const isMatch = folderName
-            ? file.originalName === fileName && file.folderPath === folderName // 文件夹中的文件
-            : file.originalName === fileName && !file.folderPath; // 根目录中的文件
-          
-          // 检查文件名和所在文件夹
-          if (isMatch) {
-            targetFile = file;
-            // 查找该文件的公开分享链接（如果存在）
-            const sharesResult = await env.IMAGE_HOST_KV.list({ prefix: `user_share:${file.userId}:` });
-            for (const shareKey of sharesResult.keys) {
-              const shareData = await env.IMAGE_HOST_KV.get(shareKey.name);
-              if (shareData) {
-                const share = JSON.parse(shareData);
-                if (share.fileId === file.id) {
-                  directShareId = share.id;
-                  
-                  // 检查分享设置
-                  // 检查分享是否有效
-                  if (!share.isActive) {
-                    return new Response('该文件的分享已禁用', { status: 403 });
-                  }
-
-                  // 检查过期时间
-                  if (share.expiresAt && new Date(share.expiresAt) < new Date()) {
-                    return new Response('该文件的分享已过期', { status: 410 });
-                  }
-
-                  // 检查访问次数限制
-                  if (share.maxViews && share.currentViews >= share.maxViews) {
-                    return new Response('该文件的访问次数已达上限', { status: 410 });
-                  }
-
-                  // 检查密码
-                  if (share.password && share.password !== password) {
-                    if (!password) {
-                      // 返回密码输入页面，使用文件夹名+文件名作为标识
-                      return new Response(generateDirectAccessPasswordPage(folderName, fileName), {
-                        headers: { 'Content-Type': 'text/html; charset=utf-8' }
-                      });
-                    } else {
-                      return new Response('密码错误', { status: 401 });
-                    }
-                  }
-                  
-                  // 更新访问次数
-                  share.currentViews += 1;
-                  share.lastAccessAt = new Date().toISOString();
-                  await env.IMAGE_HOST_KV.put(shareKey.name, JSON.stringify(share));
-                  const tokenData = await env.IMAGE_HOST_KV.get(`share:${share.token}`);
-                  if (tokenData) {
-                    const tokenShare = JSON.parse(tokenData);
-                    tokenShare.currentViews = share.currentViews;
-                    tokenShare.lastAccessAt = share.lastAccessAt;
-                    await env.IMAGE_HOST_KV.put(`share:${share.token}`, JSON.stringify(tokenShare));
-                  }
-                  
-                  break;
-                }
-              }
-            }
-            break;
-          }
-        }
+      if (isMatch) {
+        targetFile = file;
+        break;
       }
-      
-      if (targetFile) break; // 如果已找到文件，跳出循环
     }
   }
   
   if (!targetFile) {
-    return new Response('文件不存在', { status: 404 });
+    logger.warn('File not found for direct access', { requestId, folderName, fileName });
+    return new Response('File not found', { status: 404 });
   }
   
-  if (!directShareId && !targetFile.isPublic) {
-    return new Response('该文件未设置为公开', { status: 403 });
+  // 检查文件是否公开或有有效的分享链接
+  if (!targetFile.isPublic) {
+    // 查找该文件的分享链接
+    const shareKeys = await env.IMAGE_HOST_KV.list({ prefix: 'share:' });
+    let validShare: ShareLink | null = null;
+    
+    for (const key of shareKeys.keys) {
+      const shareData = await env.IMAGE_HOST_KV.get(key.name);
+      if (shareData) {
+        const share: ShareLink = JSON.parse(shareData);
+        if (share.fileId === targetFile.id && share.isActive) {
+          // 检查分享是否有效
+          if (share.expiresAt && new Date(share.expiresAt) < new Date()) continue;
+          if (share.maxViews && share.currentViews >= share.maxViews) continue;
+          
+          validShare = share;
+          break;
+        }
+      }
+    }
+    
+    if (!validShare) {
+      logger.warn('File not public and no valid share', { requestId, fileId: targetFile.id });
+      return new Response('File is not publicly accessible', { status: 403 });
+    }
+    
+    // 检查密码
+    if (validShare.password && validShare.password !== password) {
+      if (!password) {
+        return new Response(generateDirectAccessPasswordPage(folderName, fileName), {
+          headers: { 'Content-Type': 'text/html; charset=utf-8' }
+        });
+      } else {
+        logger.warn('Wrong password for direct access', { requestId, fileId: targetFile.id });
+        return new Response('Wrong password', { status: 401 });
+      }
+    }
+    
+    // 更新访问次数
+    validShare.currentViews += 1;
+    await env.IMAGE_HOST_KV.put(`share:${validShare.token}`, JSON.stringify(validShare));
   }
+  
+  logger.info('Direct access granted', { requestId, fileId: targetFile.id, fileName });
   
   // 访问文件
   if (targetFile.type.startsWith('image/')) {
     // 对于图片类型，返回预览页面
-    const shareInfo = directShareId ? { id: directShareId, currentViews: 0 } : { id: null, currentViews: 0 };
+    const shareInfo = { currentViews: 0 };
     return new Response(generateDirectImagePreviewPage(targetFile, shareInfo), {
       headers: { 'Content-Type': 'text/html; charset=utf-8' }
     });
   } else {
     // 直接返回文件
-    const fileObj = await env.IMAGE_HOST_R2.get(targetFile.filename);
+    const fileObj = await getFromR2(env, targetFile.filename);
     if (!fileObj) {
-      return new Response('文件数据不存在', { status: 404 });
+      return new Response('File data not found', { status: 404 });
     }
 
     return new Response(fileObj.body, {
@@ -319,7 +336,7 @@ function generateDirectAccessPasswordPage(folderName: string | null, fileName: s
 </html>`;
 }
 
-function generateImagePreviewPage(file: any, share: any): string {
+function generateImagePreviewPage(file: FileMetadata, share: ShareLink): string {
   return `
 <!DOCTYPE html>
 <html lang="zh-CN">
@@ -375,7 +392,7 @@ function generateImagePreviewPage(file: any, share: any): string {
 </html>`;
 }
 
-function generateDirectImagePreviewPage(file: any, share: any): string {
+function generateDirectImagePreviewPage(file: FileMetadata, share: any): string {
   return `
 <!DOCTYPE html>
 <html lang="zh-CN">
@@ -412,7 +429,7 @@ function generateDirectImagePreviewPage(file: any, share: any): string {
                 <div class="p-6 bg-gray-50 border-t">
                     <div class="flex items-center justify-between">
                         <div class="text-sm text-gray-500">
-                            ${share.id ? `访问次数: ${share.currentViews}` : '直链访问'}
+                            ${share.currentViews ? `访问次数: ${share.currentViews}` : '直链访问'}
                         </div>
                         <a 
                             href="${file.url}" 
@@ -427,5 +444,4 @@ function generateDirectImagePreviewPage(file: any, share: any): string {
         </div>
     </div>
 </body>
-</html>`;
-}
+</html>`;}

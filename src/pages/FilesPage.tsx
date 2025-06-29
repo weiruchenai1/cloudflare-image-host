@@ -202,7 +202,7 @@ const FilesPage: React.FC = () => {
     // 如果有文件夹，则使用文件夹名/文件名的路径
     // 如果没有文件夹，则直接使用文件名
     if (file.folderId && file.folderId !== 'default') {
-      const folder = folders.find(f => f.id === file.folderId);
+      const folder = folders.find((f: any) => f.id === file.folderId);
       const folderName = folder ? folder.name : '';
       if (folderName) {
         return `${window.location.origin}/s/${folderName}/${file.originalName}`;

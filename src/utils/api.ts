@@ -201,22 +201,11 @@ class ApiClient {
 
   // 统计数据
   async getDashboardStats() {
-    return this.request<{
-      totalFiles: number;
-      totalShares: number;
-      todayViews: number;
-      storageGrowth: string;
-      filesGrowth: string;
-      sharesGrowth: string;
-      viewsGrowth: string;
-    }>('/stats/dashboard');
+    return this.request<any>('/stats/dashboard');
   }
 
   async getUserStats() {
-    return this.request<{
-      storageUsed: number;
-      storageQuota: number;
-    }>('/stats/user');
+    return this.request<any>('/stats/user');
   }
 
   // 系统设置

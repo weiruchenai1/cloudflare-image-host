@@ -307,7 +307,7 @@ const SharesPage: React.FC = () => {
                             )}
                           </div>
                           <div className="ml-4">
-                            <div className="text-sm font-medium text-gray-900 dark:text-white truncate max-w-[150px]" title={file?.originalName}>
+                            <div className="text-sm font-medium text-gray-900 dark:text-white truncate max-w-[150px]" title={file?.originalName || '未知文件'}>
                               {file?.originalName || '已删除的文件'}
                             </div>
                             <div className="text-xs text-gray-500 dark:text-gray-400">

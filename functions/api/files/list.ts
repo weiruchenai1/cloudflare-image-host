@@ -23,7 +23,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       return errorResponse('No user context found', 401);
     }
 
-    logger.info('Updating file', { requestId, userId: userPayload.userId, fileId, action });
+    logger.info('Updating file', { requestId, userId: userPayload.userId,, action });
 
     // 获取文件信息
     const fileData = await env.IMAGE_HOST_KV.get(`file:${userPayload.userId}:${fileId}`);

@@ -25,40 +25,40 @@ const DashboardPage: React.FC = () => {
   }
 
   // 安全地访问数据，提供默认值
-  const statsData = dashboardStats as any || {};
-  const userStatsData = userStats as any || {};
+  const statsData = dashboardStats || {};
+  const userStatsData = userStats || {};
 
   const stats = [
     {
       title: language === 'zh' ? '总存储' : 'Total Storage',
-      value: `${((userStatsData.storageUsed || 0) / 1024 / 1024 / 1024).toFixed(1)} GB`,
-      change: statsData.storageGrowth || '+0%',
+      value: `${((userStatsData.storage?.used || 0) / 1024 / 1024 / 1024).toFixed(1)} GB`,
+      change: statsData.storage?.growth || '+0%',
       icon: HardDrive,
       color: 'from-blue-500 to-blue-600'
     },
     {
       title: language === 'zh' ? '文件数量' : 'Files Count',
-      value: (statsData.totalFiles || 0).toString(),
-      change: statsData.filesGrowth || '+0%',
+      value: (statsData.files?.total || 0).toString(),
+      change: statsData.files?.growth || '+0%',
       icon: FileText,
       color: 'from-green-500 to-green-600'
     },
     {
       title: language === 'zh' ? '分享链接' : 'Share Links',
-      value: (statsData.totalShares || 0).toString(),
-      change: statsData.sharesGrowth || '+0%',
+      value: (statsData.shares?.total || 0).toString(),
+      change: statsData.shares?.growth || '+0%',
       icon: Share,
       color: 'from-purple-500 to-purple-600'
     },
     {
       title: language === 'zh' ? '今日访问' : 'Today Views',
-      value: (statsData.todayViews || 0).toString(),
-      change: statsData.viewsGrowth || '+0%',
+      value: (statsData.views?.today || 0).toString(),
+      change: statsData.views?.growth || '+0%',
       icon: Activity,
       color: 'from-orange-500 to-orange-600'
     }
   ];
-
+  
   const quickActions = [
     {
       title: language === 'zh' ? '上传文件' : 'Upload Files',

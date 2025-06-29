@@ -1,4 +1,4 @@
-// functions/api/system/setup.ts
+// functions/api/system/setup.ts - 修复版本
 import { hashPassword } from '../../utils/crypto';
 import { successResponse, errorResponse, validationErrorResponse } from '../../utils/response';
 import { validateUsername, validatePassword } from '../../utils/validation';
@@ -14,7 +14,7 @@ const ALLOWED_FILE_TYPES = [
 ];
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
-  const requestId = (context.request as any).requestId;
+  const requestId = (context.request as any).requestId || 'setup';
   
   try {
     const { request, env } = context;
@@ -100,57 +100,63 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       maxFileSize: config.maxFileSize,
       allowedFileTypes: ALLOWED_FILE_TYPES,
       initializedAt: new Date().toISOString(),
-      adminEmail: config.adminEmail
+      adminEmail: config.adminEmail || ''
     };
 
-    // 保存数据
-    await env.IMAGE_HOST_KV.put(`user:${adminId}`, JSON.stringify(adminData));
-    await env.IMAGE_HOST_KV.put(`user:username:${adminUsername}`, JSON.stringify(adminData));
-    await env.IMAGE_HOST_KV.put('system:settings', JSON.stringify(systemSettings));
-    await env.IMAGE_HOST_KV.put('system:initialized', 'true');
+    // 保存数据到KV
+    try {
+      await env.IMAGE_HOST_KV.put(`user:${adminId}`, JSON.stringify(adminData));
+      await env.IMAGE_HOST_KV.put(`user:username:${adminUsername}`, JSON.stringify(adminData));
+      await env.IMAGE_HOST_KV.put('system:settings', JSON.stringify(systemSettings));
+      await env.IMAGE_HOST_KV.put('system:initialized', 'true');
 
-    // 创建默认文件夹
-    const defaultFolders = [
-      {
-        id: crypto.randomUUID(),
-        name: 'images',
-        parentId: null,
-        userId: adminId,
-        createdAt: new Date().toISOString(),
-        isPublic: false
-      },
-      {
-        id: crypto.randomUUID(),
-        name: 'documents',
-        parentId: null,
-        userId: adminId,
-        createdAt: new Date().toISOString(),
-        isPublic: false
+      // 创建默认文件夹
+      const defaultFolders = [
+        {
+          id: crypto.randomUUID(),
+          name: 'images',
+          parentId: null,
+          userId: adminId,
+          createdAt: new Date().toISOString(),
+          isPublic: false
+        },
+        {
+          id: crypto.randomUUID(),
+          name: 'documents',
+          parentId: null,
+          userId: adminId,
+          createdAt: new Date().toISOString(),
+          isPublic: false
+        }
+      ];
+
+      for (const folder of defaultFolders) {
+        await env.IMAGE_HOST_KV.put(`folder:${folder.id}`, JSON.stringify(folder));
       }
-    ];
 
-    for (const folder of defaultFolders) {
-      await env.IMAGE_HOST_KV.put(`folder:${folder.id}`, JSON.stringify(folder));
+      logger.info('System setup completed successfully', { 
+        requestId, 
+        adminId, 
+        adminUsername, 
+        siteName 
+      });
+
+      return successResponse({
+        message: 'System initialized successfully',
+        admin: {
+          id: adminId,
+          username: adminUsername
+        },
+        settings: {
+          siteName,
+          siteTitle
+        }
+      });
+
+    } catch (kvError) {
+      logger.error('KV storage error during setup', { requestId }, kvError as Error);
+      return errorResponse('Failed to save configuration. Please check your KV namespace setup.', 500);
     }
-
-    logger.info('System setup completed successfully', { 
-      requestId, 
-      adminId, 
-      adminUsername, 
-      siteName 
-    });
-
-    return successResponse({
-      message: 'System initialized successfully',
-      admin: {
-        id: adminId,
-        username: adminUsername
-      },
-      settings: {
-        siteName,
-        siteTitle
-      }
-    });
 
   } catch (error) {
     logger.error('Setup error', { requestId }, error as Error);

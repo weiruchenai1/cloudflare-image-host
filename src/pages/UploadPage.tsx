@@ -1,11 +1,12 @@
-// src/pages/UploadPage.tsx
-import React, { useCallback, useState } from 'react';
+// src/pages/UploadPage.tsx - 修复版本
+import React, { useCallback, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useDropzone, FileRejection } from 'react-dropzone';
-import { Upload, FileType, CheckCircle, AlertCircle, X, Folder, Tag } from 'lucide-react';
+import { Upload, FileType, CheckCircle, AlertCircle, X, Folder, Tag, RotateCcw } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { useAppStore } from '../store/useAppStore';
-import { useFiles, useFolders } from '../hooks/useFiles';
+import { useFolders } from '../hooks/useFiles';
+import { api } from '../utils/api';
 
 interface UploadFile extends File {
   id: string;
@@ -17,16 +18,29 @@ interface UploadFile extends File {
 
 const UploadPage: React.FC = () => {
   const { language } = useAppStore();
-  const { uploadFile, isUploading } = useFiles();
   const { folders, createFolder } = useFolders();
   const [files, setFiles] = useState<UploadFile[]>([]);
   const [selectedFolder, setSelectedFolder] = useState('');
   const [tags, setTags] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
 
   const onDrop = useCallback((acceptedFiles: File[], rejectedFiles: FileRejection[]) => {
     // 处理被拒绝的文件
     rejectedFiles.forEach((rejected: FileRejection) => {
-      toast.error(`${rejected.file.name}: ${language === 'zh' ? '文件类型不支持或文件过大' : 'File type not supported or file too large'}`);
+      rejected.errors.forEach((error) => {
+        let message = '';
+        switch (error.code) {
+          case 'file-too-large':
+            message = language === 'zh' ? '文件过大，最大支持100MB' : 'File too large, max 100MB';
+            break;
+          case 'file-invalid-type':
+            message = language === 'zh' ? '文件类型不支持' : 'File type not supported';
+            break;
+          default:
+            message = error.message;
+        }
+        toast.error(`${rejected.file.name}: ${message}`);
+      });
     });
 
     const newFiles: UploadFile[] = acceptedFiles.map(file => ({
@@ -37,45 +51,45 @@ const UploadPage: React.FC = () => {
     }));
     
     setFiles((prev: UploadFile[]) => [...prev, ...newFiles]);
-    
-    // 开始上传
-    newFiles.forEach(handleUploadFile);
   }, [language]);
 
   const handleUploadFile = async (file: UploadFile) => {
     setFiles((prev: UploadFile[]) => prev.map((f: UploadFile) =>
-      f.id === file.id ? { ...f, status: 'uploading' } : f
+      f.id === file.id ? { ...f, status: 'uploading', progress: 0 } : f
     ));
 
     try {
+      setIsUploading(true);
+      
       // 模拟进度更新
       const progressInterval = setInterval(() => {
         setFiles((prev: UploadFile[]) => prev.map((f: UploadFile) =>
           f.id === file.id && f.status === 'uploading' 
-            ? { ...f, progress: Math.min(f.progress + Math.random() * 30, 90) } 
+            ? { ...f, progress: Math.min(f.progress + Math.random() * 20, 90) } 
             : f
         ));
-      }, 500);
+      }, 200);
 
-      await uploadFile({
-        file,
-        folderId: selectedFolder || undefined,
-        tags: tags || undefined
-      });
+      const result = await api.uploadFile(file, selectedFolder || undefined, tags || undefined);
 
       clearInterval(progressInterval);
       
       setFiles((prev: UploadFile[]) => prev.map((f: UploadFile) =>
         f.id === file.id 
-          ? { ...f, status: 'success', progress: 100 }
+          ? { ...f, status: 'success', progress: 100, url: result.file?.url }
           : f
       ));
+
+      toast.success(`${file.name} ${language === 'zh' ? '上传成功' : 'uploaded successfully'}`);
     } catch (error: any) {
       setFiles((prev: UploadFile[]) => prev.map((f: UploadFile) =>
         f.id === file.id 
-          ? { ...f, status: 'error', error: error.message }
+          ? { ...f, status: 'error', error: error.message, progress: 0 }
           : f
       ));
+      toast.error(`${file.name}: ${error.message}`);
+    } finally {
+      setIsUploading(false);
     }
   };
 
@@ -90,6 +104,17 @@ const UploadPage: React.FC = () => {
     handleUploadFile(file);
   };
 
+  const uploadAllPending = () => {
+    const pendingFiles = files.filter(f => f.status === 'pending');
+    pendingFiles.forEach(file => {
+      handleUploadFile(file);
+    });
+  };
+
+  const clearCompleted = () => {
+    setFiles(prev => prev.filter(f => f.status !== 'success'));
+  };
+
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: {
@@ -100,7 +125,8 @@ const UploadPage: React.FC = () => {
       'application/x-rar-compressed': ['.rar']
     },
     maxSize: 100 * 1024 * 1024, // 100MB
-    multiple: true
+    multiple: true,
+    disabled: isUploading
   });
 
   const handleCreateFolder = () => {
@@ -109,6 +135,10 @@ const UploadPage: React.FC = () => {
       createFolder({ name: folderName.trim() });
     }
   };
+
+  const pendingCount = files.filter(f => f.status === 'pending').length;
+  const successCount = files.filter(f => f.status === 'success').length;
+  const errorCount = files.filter(f => f.status === 'error').length;
 
   return (
     <div className="space-y-8">
@@ -126,6 +156,35 @@ const UploadPage: React.FC = () => {
             {language === 'zh' ? '支持多种文件格式，拖拽或点击选择文件开始上传' : 'Support multiple file formats, drag and drop or click to select files'}
           </p>
         </div>
+        
+        {files.length > 0 && (
+          <div className="flex items-center space-x-3">
+            {pendingCount > 0 && (
+              <motion.button
+                onClick={uploadAllPending}
+                disabled={isUploading}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className="flex items-center space-x-2 px-4 py-2 bg-blue-500 hover:bg-blue-600 disabled:opacity-50 text-white rounded-lg transition-colors"
+              >
+                <Upload className="w-4 h-4" />
+                <span>{language === 'zh' ? `上传全部 (${pendingCount})` : `Upload All (${pendingCount})`}</span>
+              </motion.button>
+            )}
+            
+            {successCount > 0 && (
+              <motion.button
+                onClick={clearCompleted}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className="flex items-center space-x-2 px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded-lg transition-colors"
+              >
+                <CheckCircle className="w-4 h-4" />
+                <span>{language === 'zh' ? '清除成功' : 'Clear Success'}</span>
+              </motion.button>
+            )}
+          </div>
+        )}
       </motion.div>
 
       {/* 上传区域 */}
@@ -139,11 +198,12 @@ const UploadPage: React.FC = () => {
           className={`
             relative border-2 border-dashed rounded-2xl p-12 text-center cursor-pointer
             transition-all duration-300 bg-white/50 dark:bg-gray-800/50 backdrop-blur-sm
-            hover:scale-[1.02] active:scale-[0.98]
+            ${!isUploading ? 'hover:scale-[1.02] active:scale-[0.98]' : ''}
             ${isDragActive 
               ? 'border-blue-400 bg-blue-50/50 dark:bg-blue-900/20' 
               : 'border-gray-300 dark:border-gray-600 hover:border-blue-400'
             }
+            ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}
           `}
         >
           <input {...getInputProps()} />
@@ -159,9 +219,11 @@ const UploadPage: React.FC = () => {
             
             <div>
               <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-                {isDragActive 
-                  ? (language === 'zh' ? '释放文件开始上传' : 'Release files to upload')
-                  : (language === 'zh' ? '拖拽文件到此处或点击选择' : 'Drag files here or click to select')
+                {isUploading 
+                  ? (language === 'zh' ? '上传中，请稍候...' : 'Uploading, please wait...')
+                  : isDragActive 
+                    ? (language === 'zh' ? '释放文件开始上传' : 'Release files to upload')
+                    : (language === 'zh' ? '拖拽文件到此处或点击选择' : 'Drag files here or click to select')
                 }
               </h3>
               <p className="text-gray-500 dark:text-gray-400">
@@ -247,9 +309,26 @@ const UploadPage: React.FC = () => {
             exit={{ opacity: 0, y: -20 }}
             className="space-y-3"
           >
-            <h4 className="text-lg font-semibold text-gray-900 dark:text-white">
-              {language === 'zh' ? '上传队列' : 'Upload Queue'} ({files.length})
-            </h4>
+            <div className="flex items-center justify-between">
+              <h4 className="text-lg font-semibold text-gray-900 dark:text-white">
+                {language === 'zh' ? '上传队列' : 'Upload Queue'} ({files.length})
+              </h4>
+              
+              {(successCount > 0 || errorCount > 0) && (
+                <div className="flex items-center space-x-4 text-sm">
+                  {successCount > 0 && (
+                    <span className="text-green-600 dark:text-green-400">
+                      ✓ {successCount} {language === 'zh' ? '成功' : 'success'}
+                    </span>
+                  )}
+                  {errorCount > 0 && (
+                    <span className="text-red-600 dark:text-red-400">
+                      ✗ {errorCount} {language === 'zh' ? '失败' : 'failed'}
+                    </span>
+                  )}
+                </div>
+              )}
+            </div>
             
             {files.map((file) => (
               <motion.div
@@ -260,17 +339,17 @@ const UploadPage: React.FC = () => {
                 className="bg-white/70 dark:bg-gray-800/70 backdrop-blur-sm rounded-lg p-4 border border-gray-200 dark:border-gray-700"
               >
                 <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center space-x-3">
-                    <FileType className="w-5 h-5 text-gray-500" />
-                    <span className="font-medium text-gray-900 dark:text-white truncate max-w-xs">
+                  <div className="flex items-center space-x-3 flex-1 min-w-0">
+                    <FileType className="w-5 h-5 text-gray-500 flex-shrink-0" />
+                    <span className="font-medium text-gray-900 dark:text-white truncate">
                       {file.name}
                     </span>
-                    <span className="text-sm text-gray-500">
+                    <span className="text-sm text-gray-500 flex-shrink-0">
                       {(file.size / 1024 / 1024).toFixed(2)} MB
                     </span>
                   </div>
                   
-                  <div className="flex items-center space-x-2">
+                  <div className="flex items-center space-x-2 flex-shrink-0">
                     {file.status === 'success' && (
                       <CheckCircle className="w-5 h-5 text-green-500" />
                     )}
@@ -279,11 +358,21 @@ const UploadPage: React.FC = () => {
                         <AlertCircle className="w-5 h-5 text-red-500" />
                         <button
                           onClick={() => retryUpload(file)}
-                          className="text-xs bg-red-100 hover:bg-red-200 text-red-700 px-2 py-1 rounded"
+                          className="p-1 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded"
+                          title={language === 'zh' ? '重试' : 'Retry'}
                         >
-                          {language === 'zh' ? '重试' : 'Retry'}
+                          <RotateCcw className="w-4 h-4" />
                         </button>
                       </div>
+                    )}
+                    {file.status === 'pending' && (
+                      <button
+                        onClick={() => handleUploadFile(file)}
+                        disabled={isUploading}
+                        className="text-xs bg-blue-100 hover:bg-blue-200 disabled:opacity-50 text-blue-700 px-2 py-1 rounded"
+                      >
+                        {language === 'zh' ? '上传' : 'Upload'}
+                      </button>
                     )}
                     <button
                       onClick={() => removeFile(file.id)}
@@ -320,6 +409,16 @@ const UploadPage: React.FC = () => {
                   <div className="mt-2 p-2 bg-green-50 dark:bg-green-900/20 rounded">
                     <p className="text-sm text-green-700 dark:text-green-300">
                       {language === 'zh' ? '上传成功！' : 'Upload successful!'}
+                      {file.url && (
+                        <a 
+                          href={file.url} 
+                          target="_blank" 
+                          rel="noopener noreferrer" 
+                          className="ml-2 underline hover:no-underline"
+                        >
+                          {language === 'zh' ? '查看文件' : 'View file'}
+                        </a>
+                      )}
                     </p>
                   </div>
                 )}

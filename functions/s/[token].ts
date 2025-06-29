@@ -1,7 +1,7 @@
-// functions/s/[token].ts - 分享访问页面
+// functions/s/[token].ts - 修复版本
 import { getFromR2 } from '../utils/storage';
 import { logger } from '../utils/logger';
-import { Env, ShareLink, FileMetadata, User } from '../types';
+import { Env, ShareLink, FileMetadata } from '../types';
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   const requestId = crypto.randomUUID().substring(0, 8);
@@ -23,7 +23,6 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
       return handleTokenAccess(token, password, env, request, requestId);
     } else {
       // 处理直链访问
-      // 可能是 /s/{文件名} 或 /s/{文件夹名}/{文件名}
       const fileName = pathParts.length === 2 
         ? pathParts[1] // 根目录下的文件 /s/文件名
         : pathParts.slice(2).join('/'); // 文件夹下的文件 /s/文件夹/文件名
@@ -39,7 +38,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
 };
 
 // 处理基于token的文件访问
-async function handleTokenAccess(token: string, password: string | null, env: Env, request: Request, requestId: string) {
+async function handleTokenAccess(token: string, password: string | null, env: Env, request: Request, requestId: string): Promise<Response> {
   // 获取分享信息
   const shareData = await env.IMAGE_HOST_KV.get(`share:${token}`);
   if (!shareData) {
@@ -85,13 +84,18 @@ async function handleTokenAccess(token: string, password: string | null, env: En
   let file: FileMetadata | null = null;
   
   for (const key of fileKeys.keys) {
-    const fileData = await env.IMAGE_HOST_KV.get(key.name);
-    if (fileData) {
-      const f: FileMetadata = JSON.parse(fileData);
-      if (f.id === share.fileId) {
-        file = f;
-        break;
+    try {
+      const fileData = await env.IMAGE_HOST_KV.get(key.name);
+      if (fileData) {
+        const f: FileMetadata = JSON.parse(fileData);
+        if (f.id === share.fileId) {
+          file = f;
+          break;
+        }
       }
+    } catch (parseError) {
+      logger.warn('Failed to parse file data', { requestId, key: key.name }, parseError as Error);
+      continue;
     }
   }
 
@@ -107,14 +111,18 @@ async function handleTokenAccess(token: string, password: string | null, env: En
   // 同时更新用户分享记录
   const userShareKeys = await env.IMAGE_HOST_KV.list({ prefix: `user_share:${file.userId}:` });
   for (const key of userShareKeys.keys) {
-    const userShareData = await env.IMAGE_HOST_KV.get(key.name);
-    if (userShareData) {
-      const userShare: ShareLink = JSON.parse(userShareData);
-      if (userShare.token === token) {
-        userShare.currentViews = share.currentViews;
-        await env.IMAGE_HOST_KV.put(key.name, JSON.stringify(userShare));
-        break;
+    try {
+      const userShareData = await env.IMAGE_HOST_KV.get(key.name);
+      if (userShareData) {
+        const userShare: ShareLink = JSON.parse(userShareData);
+        if (userShare.token === token) {
+          userShare.currentViews = share.currentViews;
+          await env.IMAGE_HOST_KV.put(key.name, JSON.stringify(userShare));
+          break;
+        }
       }
+    } catch (updateError) {
+      logger.warn('Failed to update user share views', { requestId, key: key.name }, updateError as Error);
     }
   }
 
@@ -148,7 +156,7 @@ async function handleTokenAccess(token: string, password: string | null, env: En
 }
 
 // 处理直链访问
-async function handleDirectAccess(folderName: string | null, fileName: string, password: string | null, env: Env, request: Request, requestId: string) {
+async function handleDirectAccess(folderName: string | null, fileName: string, password: string | null, env: Env, request: Request, requestId: string): Promise<Response> {
   logger.info('Direct access attempt', { requestId, folderName, fileName });
   
   // 获取所有文件，查找匹配的文件
@@ -156,18 +164,23 @@ async function handleDirectAccess(folderName: string | null, fileName: string, p
   let targetFile: FileMetadata | null = null;
   
   for (const key of fileKeys.keys) {
-    const fileData = await env.IMAGE_HOST_KV.get(key.name);
-    if (fileData) {
-      const file: FileMetadata = JSON.parse(fileData);
-      
-      const isMatch = folderName
-        ? file.originalName === fileName && file.folderPath === folderName
-        : file.originalName === fileName && !file.folderPath;
-      
-      if (isMatch) {
-        targetFile = file;
-        break;
+    try {
+      const fileData = await env.IMAGE_HOST_KV.get(key.name);
+      if (fileData) {
+        const file: FileMetadata = JSON.parse(fileData);
+        
+        const isMatch = folderName
+          ? file.originalName === fileName && file.folderPath === folderName
+          : file.originalName === fileName && !file.folderPath;
+        
+        if (isMatch) {
+          targetFile = file;
+          break;
+        }
       }
+    } catch (parseError) {
+      logger.warn('Failed to parse file data during direct access', { requestId, key: key.name }, parseError as Error);
+      continue;
     }
   }
   
@@ -183,17 +196,22 @@ async function handleDirectAccess(folderName: string | null, fileName: string, p
     let validShare: ShareLink | null = null;
     
     for (const key of shareKeys.keys) {
-      const shareData = await env.IMAGE_HOST_KV.get(key.name);
-      if (shareData) {
-        const share: ShareLink = JSON.parse(shareData);
-        if (share.fileId === targetFile.id && share.isActive) {
-          // 检查分享是否有效
-          if (share.expiresAt && new Date(share.expiresAt) < new Date()) continue;
-          if (share.maxViews && share.currentViews >= share.maxViews) continue;
-          
-          validShare = share;
-          break;
+      try {
+        const shareData = await env.IMAGE_HOST_KV.get(key.name);
+        if (shareData) {
+          const share: ShareLink = JSON.parse(shareData);
+          if (share.fileId === targetFile.id && share.isActive) {
+            // 检查分享是否有效
+            if (share.expiresAt && new Date(share.expiresAt) < new Date()) continue;
+            if (share.maxViews && share.currentViews >= share.maxViews) continue;
+            
+            validShare = share;
+            break;
+          }
         }
+      } catch (parseError) {
+        logger.warn('Failed to parse share data', { requestId, key: key.name }, parseError as Error);
+        continue;
       }
     }
     
@@ -444,4 +462,5 @@ function generateDirectImagePreviewPage(file: FileMetadata, share: any): string 
         </div>
     </div>
 </body>
-</html>`;}
+</html>`;
+}

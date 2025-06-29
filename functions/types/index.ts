@@ -1,21 +1,21 @@
-// functions/types/index.ts
+// functions/types/index.ts - 修复版本
 export interface Env {
   IMAGE_HOST_KV: KVNamespace;
   IMAGE_HOST_R2: R2Bucket;
   
   // 环境变量
   JWT_SECRET: string;
-  R2_BUCKET_NAME: string;
-  R2_ACCOUNT_ID: string;
-  R2_ACCESS_KEY_ID: string;
-  R2_SECRET_ACCESS_KEY: string;
+  R2_BUCKET_NAME?: string;
+  R2_ACCOUNT_ID?: string;
+  R2_ACCESS_KEY_ID?: string;
+  R2_SECRET_ACCESS_KEY?: string;
   R2_PUBLIC_DOMAIN: string;
-  SITE_DOMAIN: string;
-  DEFAULT_STORAGE_QUOTA: string;
-  MAX_FILE_SIZE: string;
-  ADMIN_EMAIL: string;
-  BCRYPT_ROUNDS: string;
-  SESSION_EXPIRE_HOURS: string;
+  SITE_DOMAIN?: string;
+  DEFAULT_STORAGE_QUOTA?: string;
+  MAX_FILE_SIZE?: string;
+  ADMIN_EMAIL?: string;
+  BCRYPT_ROUNDS?: string;
+  SESSION_EXPIRE_HOURS?: string;
 }
 
 export interface User {
@@ -52,6 +52,7 @@ export interface Folder {
   userId: string;
   createdAt: string;
   isPublic: boolean;
+  isDefault?: boolean;
 }
 
 export interface ShareLink {
@@ -96,4 +97,29 @@ export interface SystemSettings {
   allowedFileTypes: string[];
   initializedAt: string;
   adminEmail: string;
+}
+
+// JWT payload 类型
+export interface JWTPayload {
+  userId: string;
+  username: string;
+  role: string;
+  iat: number;
+  exp: number;
+}
+
+// 环境配置类型
+export interface EnvConfig {
+  jwtSecret: string;
+  r2BucketName?: string;
+  r2AccountId?: string;
+  r2AccessKey?: string;
+  r2SecretKey?: string;
+  r2PublicDomain: string;
+  siteDomain?: string;
+  defaultStorageQuota: number;
+  maxFileSize: number;
+  adminEmail?: string;
+  bcryptRounds: number;
+  sessionExpireHours: number;
 }

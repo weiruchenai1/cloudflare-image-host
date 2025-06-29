@@ -1,42 +1,25 @@
-// src/hooks/useAuth.ts
-import { useEffect } from 'react';
+// src/hooks/useAuth.ts - 修复版本
 import { useAppStore } from '../store/useAppStore';
 import { api } from '../utils/api';
 
 export const useAuth = () => {
-  const { user, isAuthenticated, setUser, setAuthenticated, logout } = useAppStore();
-
-  useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (token && !isAuthenticated) {
-      api.setToken(token);
-      validateToken();
-    }
-  }, [isAuthenticated]);
-
-  const validateToken = async () => {
-    try {
-      const response = await api.validateToken() as { user?: any };
-      if (response.user) {
-        setUser(response.user);
-        setAuthenticated(true);
-      } else {
-        logout();
-      }
-    } catch (error) {
-      console.error('Token validation failed:', error);
-      logout();
-    }
-  };
+  const { user, isAuthenticated, setUser, setAuthenticated, logout: storeLogout } = useAppStore();
 
   const login = async (credentials: { username: string; password: string }) => {
-    const response = await api.login(credentials);
-    if (response.token && response.user) {
-      api.setToken(response.token);
-      setUser(response.user);
-      setAuthenticated(true);
+    try {
+      const response = await api.login(credentials);
+      
+      if (response.token && response.user) {
+        api.setToken(response.token);
+        setUser(response.user);
+        setAuthenticated(true);
+        return response;
+      } else {
+        throw new Error('Invalid response format');
+      }
+    } catch (error: any) {
+      throw new Error(error.message || 'Login failed');
     }
-    return response;
   };
 
   const register = async (data: {
@@ -45,12 +28,35 @@ export const useAuth = () => {
     password: string;
     inviteCode: string;
   }) => {
-    return api.register(data);
+    try {
+      const response = await api.register(data);
+      return response;
+    } catch (error: any) {
+      throw new Error(error.message || 'Registration failed');
+    }
   };
 
-  const handleLogout = () => {
+  const validateToken = async () => {
+    try {
+      const response = await api.validateToken();
+      if (response.user) {
+        setUser(response.user);
+        setAuthenticated(true);
+        return response;
+      } else {
+        logout();
+        return null;
+      }
+    } catch (error) {
+      console.error('Token validation failed:', error);
+      logout();
+      return null;
+    }
+  };
+
+  const logout = () => {
     api.clearToken();
-    logout();
+    storeLogout();
   };
 
   return {
@@ -58,7 +64,7 @@ export const useAuth = () => {
     isAuthenticated,
     login,
     register,
-    logout: handleLogout,
+    logout,
     validateToken,
   };
 };

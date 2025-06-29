@@ -1,10 +1,10 @@
-// functions/api/system/health.ts
+// functions/api/system/health.ts - 修复版本
 import { successResponse } from '../../utils/response';
 import { logger } from '../../utils/logger';
 import { Env } from '../../types';
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
-  const requestId = (context.request as any).requestId;
+  const requestId = (context.request as any).requestId || 'health-check';
   
   try {
     const { env } = context;

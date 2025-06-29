@@ -1,4 +1,4 @@
-// src/utils/api.ts
+// src/utils/api.ts - 修复版本
 class ApiClient {
   private baseURL: string;
   private token: string | null = null;
@@ -45,23 +45,32 @@ class ApiClient {
     if (!response.ok) {
       let errorMessage = 'Network error';
       try {
-        const errorData = await response.json() as { message?: string };
-        errorMessage = errorData.message || errorMessage;
+        const errorData = await response.json() as { error?: string; message?: string };
+        errorMessage = errorData.error || errorData.message || errorMessage;
       } catch {
         errorMessage = await response.text() || errorMessage;
       }
       throw new Error(errorMessage);
     }
 
-    return response.json() as Promise<T>;
+    const result = await response.json();
+    
+    // 检查API响应格式
+    if (result.success === false) {
+      throw new Error(result.error || result.message || 'Request failed');
+    }
+    
+    // 返回data字段的内容，如果没有则返回整个结果
+    return result.data || result;
   }
 
   // 认证相关
   async login(credentials: { username: string; password: string }) {
-    return this.request<{ token: string; user: any }>('/auth/login', {
+    const result = await this.request<{ user: any; token: string }>('/auth/login', {
       method: 'POST',
       body: JSON.stringify(credentials),
     });
+    return result;
   }
 
   async register(data: {
@@ -70,14 +79,14 @@ class ApiClient {
     password: string;
     inviteCode: string;
   }) {
-    return this.request<{ success: boolean; message: string }>('/auth/register', {
+    return this.request<{ message: string }>('/auth/register', {
       method: 'POST',
       body: JSON.stringify(data),
     });
   }
 
   async validateToken() {
-    return this.request<{ user?: any }>('/auth/validate');
+    return this.request<{ user: any }>('/auth/validate');
   }
 
   async setup(data: {
@@ -87,7 +96,7 @@ class ApiClient {
     siteTitle: string;
     defaultStorageQuota: number;
   }) {
-    return this.request<{ success: boolean; message?: string }>('/setup', {
+    return this.request<{ success: boolean; message?: string }>('/system/setup', {
       method: 'POST',
       body: JSON.stringify(data),
     });
@@ -100,7 +109,7 @@ class ApiClient {
     if (folderId) formData.append('folderId', folderId);
     if (tags) formData.append('tags', tags);
 
-    return this.request<{ success: boolean; file: any }>('/upload', {
+    return this.request<{ file: any }>('/upload', {
       method: 'POST',
       body: formData,
     });
@@ -111,24 +120,28 @@ class ApiClient {
     limit?: number;
     type?: string;
     search?: string;
+    folderId?: string;
   }) {
     const query = new URLSearchParams();
     if (params) {
       Object.entries(params).forEach(([key, value]) => {
-        if (value !== undefined && value !== null) {
+        if (value !== undefined && value !== null && value !== '') {
           query.append(key, value.toString());
         }
       });
     }
-    return this.request<{ files: any[]; total: number }>(`/files/list?${query.toString()}`);
+    const queryString = query.toString();
+    return this.request<{ files: any[]; pagination?: any }>(`/files/list${queryString ? `?${queryString}` : ''}`);
   }
 
   async deleteFile(fileId: string) {
-    return this.request<{ success: boolean }>(`/files/${fileId}`, { method: 'DELETE' });
+    return this.request<{ message: string }>(`/files/${fileId}`, { 
+      method: 'DELETE' 
+    });
   }
 
   async updateFile(fileId: string, action: string, data: any) {
-    return this.request<{ success: boolean; file: any }>(`/files/${fileId}`, {
+    return this.request<{ file: any; message: string }>(`/files/${fileId}`, {
       method: 'PUT',
       body: JSON.stringify({ action, ...data }),
     });
@@ -136,14 +149,15 @@ class ApiClient {
 
   // 文件夹相关
   async createFolder(name: string, parentId?: string) {
-    return this.request<{ success: boolean; folder: any }>('/folders', {
+    return this.request<{ folder: any }>('/folders', {
       method: 'POST',
       body: JSON.stringify({ name, parentId }),
     });
   }
 
-  async getFolders() {
-    return this.request<{ folders: any[] }>('/folders');
+  async getFolders(parentId?: string) {
+    const query = parentId ? `?parentId=${parentId}` : '';
+    return this.request<{ folders: any[] }>(`/folders${query}`);
   }
 
   // 分享相关
@@ -152,7 +166,7 @@ class ApiClient {
     expiresAt?: string;
     maxViews?: number;
   }) {
-    return this.request<{ success: boolean; share: any }>('/shares', {
+    return this.request<{ share: any }>('/shares', {
       method: 'POST',
       body: JSON.stringify({ fileId, ...options }),
     });
@@ -163,11 +177,13 @@ class ApiClient {
   }
 
   async deleteShare(shareId: string) {
-    return this.request<{ success: boolean }>(`/shares/${shareId}`, { method: 'DELETE' });
+    return this.request<{ message: string }>(`/shares/${shareId}`, { 
+      method: 'DELETE' 
+    });
   }
 
   async updateShare(shareId: string, data: any) {
-    return this.request<{ success: boolean }>(`/shares/${shareId}`, {
+    return this.request<{ share: any }>(`/shares/${shareId}`, {
       method: 'PUT',
       body: JSON.stringify(data),
     });
@@ -179,7 +195,7 @@ class ApiClient {
   }
 
   async updateUser(userId: string, action: string, value?: any) {
-    return this.request<{ success: boolean }>('/admin/users', {
+    return this.request<{ message: string }>('/admin/users', {
       method: 'PUT',
       body: JSON.stringify({ userId, action, value }),
     });
@@ -189,7 +205,7 @@ class ApiClient {
     expiresAt?: string;
     maxUses?: number;
   }) {
-    return this.request<{ success: boolean; invite: any }>('/admin/invites', {
+    return this.request<{ invite: any }>('/admin/invites', {
       method: 'POST',
       body: JSON.stringify(options),
     });
@@ -208,13 +224,13 @@ class ApiClient {
     return this.request<any>('/stats/user');
   }
 
-  // 系统设置
-  async getSystemSettings() {
-    return this.request<any>('/system/settings');
+  // 系统状态和设置
+  async getSystemStatus() {
+    return this.request<any>('/system/status');
   }
 
   async updateSystemSettings(settings: any) {
-    return this.request<{ success: boolean }>('/system/settings', {
+    return this.request<{ message: string }>('/system/settings', {
       method: 'PUT',
       body: JSON.stringify(settings),
     });

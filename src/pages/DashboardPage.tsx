@@ -1,4 +1,4 @@
-// src/pages/DashboardPage.tsx
+// src/pages/DashboardPage.tsx - 修复版本
 import React from 'react';
 import { motion } from 'framer-motion';
 import { Link } from 'react-router-dom';
@@ -25,8 +25,20 @@ const DashboardPage: React.FC = () => {
   }
 
   // 安全地访问数据，提供默认值
-  const statsData = dashboardStats || {};
-  const userStatsData = userStats || {};
+  const statsData = dashboardStats || {
+    users: { total: 0, active: 0, growth: '+0%' },
+    files: { total: 0, growth: '+0%' },
+    shares: { total: 0, growth: '+0%' },
+    storage: { used: 0, growth: '+0%' },
+    views: { today: 0, total: 0, growth: '+0%' }
+  };
+
+  const userStatsData = userStats || {
+    storage: { used: 0, quota: 0, percentage: 0 },
+    files: { count: 0 },
+    shares: { count: 0 },
+    account: { createdAt: new Date().toISOString(), role: 'user', isActive: true }
+  };
 
   const stats = [
     {
@@ -38,14 +50,14 @@ const DashboardPage: React.FC = () => {
     },
     {
       title: language === 'zh' ? '文件数量' : 'Files Count',
-      value: (statsData.files?.total || 0).toString(),
+      value: (userStatsData.files?.count || 0).toString(),
       change: statsData.files?.growth || '+0%',
       icon: FileText,
       color: 'from-green-500 to-green-600'
     },
     {
       title: language === 'zh' ? '分享链接' : 'Share Links',
-      value: (statsData.shares?.total || 0).toString(),
+      value: (userStatsData.shares?.count || 0).toString(),
       change: statsData.shares?.growth || '+0%',
       icon: Share,
       color: 'from-purple-500 to-purple-600'
@@ -83,8 +95,8 @@ const DashboardPage: React.FC = () => {
     }
   ];
 
-  const storageUsedGB = (userStatsData.storageUsed || 0) / 1024 / 1024 / 1024;
-  const storageQuotaGB = (userStatsData.storageQuota || 0) / 1024 / 1024 / 1024;
+  const storageUsedGB = (userStatsData.storage?.used || 0) / 1024 / 1024 / 1024;
+  const storageQuotaGB = (userStatsData.storage?.quota || user?.storageQuota || 0) / 1024 / 1024 / 1024;
   const storagePercentage = storageQuotaGB > 0 ? (storageUsedGB / storageQuotaGB) * 100 : 0;
 
   return (
@@ -220,8 +232,8 @@ const DashboardPage: React.FC = () => {
         
         <p className="text-sm text-gray-500 dark:text-gray-400">
           {language === 'zh' 
-            ? `您还有 ${(storageQuotaGB - storageUsedGB).toFixed(2)} GB 可用空间` 
-            : `You have ${(storageQuotaGB - storageUsedGB).toFixed(2)} GB available space`
+            ? `您还有 ${Math.max(0, storageQuotaGB - storageUsedGB).toFixed(2)} GB 可用空间` 
+            : `You have ${Math.max(0, storageQuotaGB - storageUsedGB).toFixed(2)} GB available space`
           }
         </p>
       </motion.div>

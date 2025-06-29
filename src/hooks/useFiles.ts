@@ -1,4 +1,4 @@
-// src/hooks/useFiles.ts
+// src/hooks/useFiles.ts - 修复版本
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../utils/api';
 import { toast } from 'react-hot-toast';
@@ -8,6 +8,7 @@ export const useFiles = (params?: {
   limit?: number;
   type?: string;
   search?: string;
+  folderId?: string;
 }) => {
   const queryClient = useQueryClient();
 
@@ -15,6 +16,7 @@ export const useFiles = (params?: {
     queryKey: ['files', params],
     queryFn: () => api.getFiles(params),
     staleTime: 30000, // 30秒
+    retry: 1,
   });
 
   const uploadMutation = useMutation({
@@ -23,10 +25,10 @@ export const useFiles = (params?: {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['files'] });
       queryClient.invalidateQueries({ queryKey: ['stats'] });
-      toast.success('文件上传成功');
     },
     onError: (error: any) => {
-      toast.error(error.message || '上传失败');
+      console.error('Upload error:', error);
+      throw error; // 重新抛出错误以便组件处理
     },
   });
 
@@ -55,11 +57,12 @@ export const useFiles = (params?: {
   });
 
   return {
-    files: (filesQuery.data as { files?: any[] })?.files || [],
-    total: (filesQuery.data as { total?: number })?.total || 0,
+    files: filesQuery.data?.files || [],
+    pagination: filesQuery.data?.pagination,
+    total: filesQuery.data?.pagination?.total || 0,
     isLoading: filesQuery.isLoading,
     error: filesQuery.error,
-    uploadFile: uploadMutation.mutate,
+    uploadFile: uploadMutation.mutateAsync, // 使用 mutateAsync 以便处理异步结果
     deleteFile: deleteMutation.mutate,
     updateFile: updateMutation.mutate,
     isUploading: uploadMutation.isPending,
@@ -69,12 +72,13 @@ export const useFiles = (params?: {
   };
 };
 
-export const useFolders = () => {
+export const useFolders = (parentId?: string) => {
   const queryClient = useQueryClient();
 
   const foldersQuery = useQuery({
-    queryKey: ['folders'],
-    queryFn: () => api.getFolders(),
+    queryKey: ['folders', parentId],
+    queryFn: () => api.getFolders(parentId),
+    staleTime: 60000, // 1分钟
   });
 
   const createMutation = useMutation({
@@ -90,9 +94,11 @@ export const useFolders = () => {
   });
 
   return {
-    folders: (foldersQuery.data as { folders?: any[] })?.folders || [],
+    folders: foldersQuery.data?.folders || [],
     isLoading: foldersQuery.isLoading,
+    error: foldersQuery.error,
     createFolder: createMutation.mutate,
     isCreating: createMutation.isPending,
+    refetch: foldersQuery.refetch,
   };
 };

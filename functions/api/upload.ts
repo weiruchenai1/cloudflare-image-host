@@ -1,4 +1,4 @@
-// functions/api/upload.ts
+// functions/api/upload.ts - 修复版本
 import { successResponse, errorResponse, validationErrorResponse } from '../utils/response';
 import { validateFileType, validateFileSize, sanitizeFilename } from '../utils/validation';
 import { uploadToR2, generateFileUrl, generateStorageKey } from '../utils/storage';
@@ -15,7 +15,7 @@ const ALLOWED_FILE_TYPES = [
 ];
 
 export const onRequestPost: PagesFunction<Env> = async (context) => {
-  const requestId = (context.request as any).requestId;
+  const requestId = (context.request as any).requestId || 'upload';
   
   try {
     const { request, env } = context;
@@ -42,8 +42,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     // 解析表单数据
     const formData = await request.formData();
     const file = formData.get('file') as File;
-    const folderId = formData.get('folderId') as string;
-    const tags = formData.get('tags') as string;
+    const folderId = formData.get('folderId') as string | null;
+    const tags = formData.get('tags') as string | null;
     
     if (!file) {
       logger.warn('No file provided in upload', { requestId, userId: user.id });
@@ -90,13 +90,18 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     // 获取文件夹信息
     let folderPath = '';
     if (folderId && folderId !== 'default') {
-      const folderData = await env.IMAGE_HOST_KV.get(`folder:${folderId}`);
-      if (folderData) {
-        const folder = JSON.parse(folderData);
-        if (folder.userId === user.id) {
-          folderPath = folder.name;
-          logger.debug('Upload to folder', { requestId, userId: user.id, folderId, folderPath });
+      try {
+        const folderData = await env.IMAGE_HOST_KV.get(`folder:${folderId}`);
+        if (folderData) {
+          const folder = JSON.parse(folderData);
+          if (folder.userId === user.id) {
+            folderPath = folder.name;
+            logger.debug('Upload to folder', { requestId, userId: user.id, folderId, folderPath });
+          }
         }
+      } catch (folderError) {
+        logger.warn('Failed to get folder info', { requestId, folderId }, folderError as Error);
+        // 继续上传，但不设置文件夹路径
       }
     }
 
@@ -104,8 +109,13 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     const storageKey = generateStorageKey(user.id, uniqueFilename, folderPath);
     
     // 上传文件到 R2
-    await uploadToR2(env, file, storageKey);
-    logger.debug('File uploaded to R2', { requestId, userId: user.id, storageKey });
+    try {
+      await uploadToR2(env, file, storageKey);
+      logger.debug('File uploaded to R2', { requestId, userId: user.id, storageKey });
+    } catch (uploadError) {
+      logger.error('R2 upload failed', { requestId, userId: user.id, storageKey }, uploadError as Error);
+      return errorResponse('File upload failed', 500);
+    }
 
     // 生成文件 URL
     const fileUrl = generateFileUrl(config.r2PublicDomain, storageKey);
@@ -119,8 +129,8 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
       type: file.type,
       size: file.size,
       url: fileUrl,
-      folderId: folderId || null,
-      folderPath: folderPath || null,
+      folderId: folderId || undefined,
+      folderPath: folderPath || undefined,
       userId: user.id,
       uploadedAt: new Date().toISOString(),
       isPublic: false,
@@ -128,25 +138,37 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
     };
 
     // 保存文件元数据
-    await env.IMAGE_HOST_KV.put(`file:${user.id}:${fileId}`, JSON.stringify(fileMetadata));
-    
-    // 更新用户存储使用量
-    user.storageUsed += file.size;
-    await env.IMAGE_HOST_KV.put(`user:${user.id}`, JSON.stringify(user));
-    await env.IMAGE_HOST_KV.put(`user:username:${user.username}`, JSON.stringify(user));
+    try {
+      await env.IMAGE_HOST_KV.put(`file:${user.id}:${fileId}`, JSON.stringify(fileMetadata));
+      
+      // 更新用户存储使用量
+      user.storageUsed += file.size;
+      await env.IMAGE_HOST_KV.put(`user:${user.id}`, JSON.stringify(user));
+      await env.IMAGE_HOST_KV.put(`user:username:${user.username}`, JSON.stringify(user));
 
-    logger.info('File upload completed', { 
-      requestId, 
-      userId: user.id, 
-      fileId, 
-      filename: file.name,
-      fileSize: file.size,
-      newStorageUsed: user.storageUsed
-    });
+      logger.info('File upload completed', { 
+        requestId, 
+        userId: user.id, 
+        fileId, 
+        filename: file.name,
+        fileSize: file.size,
+        newStorageUsed: user.storageUsed
+      });
 
-    return successResponse({
-      file: fileMetadata
-    }, 'File uploaded successfully');
+      return successResponse({
+        file: fileMetadata
+      }, 'File uploaded successfully');
+
+    } catch (kvError) {
+      logger.error('KV storage error during upload', { requestId, userId: user.id }, kvError as Error);
+      // 尝试删除已上传的R2文件
+      try {
+        await env.IMAGE_HOST_R2.delete(storageKey);
+      } catch (deleteError) {
+        logger.error('Failed to cleanup R2 file after KV error', { requestId, storageKey }, deleteError as Error);
+      }
+      return errorResponse('Failed to save file metadata', 500);
+    }
 
   } catch (error) {
     logger.error('Upload error', { requestId }, error as Error);

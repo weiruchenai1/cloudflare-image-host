@@ -54,14 +54,19 @@ async function loadUserInfo() {
                 currentUser = result.user;
                 updateUserDisplay();
                 updateQuotaDisplay();
+            } else {
+                // 认证失败，显示错误信息
+                console.error('Authentication failed:', result);
+                showAlert('认证失败，请刷新页面重试', 'error');
             }
         } else {
-            // 未登录，重定向到登录页
-            window.location.href = '/login.html';
+            // API调用失败，显示错误信息
+            console.error('Failed to fetch user info, status:', response.status);
+            showAlert('无法获取用户信息，请刷新页面重试', 'error');
         }
     } catch (error) {
         console.error('加载用户信息失败:', error);
-        window.location.href = '/login.html';
+        showAlert('网络错误，请刷新页面重试', 'error');
     }
 }
 

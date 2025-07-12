@@ -77,11 +77,13 @@
         <p>这个页面可以帮助您测试多用户文件托管系统的各项功能是否正常工作。</p>
         
         <div style="margin: 20px 0;">
+            <button class="btn" onclick="checkEnvironment()">检查环境配置</button>
             <button class="btn" onclick="runAllTests()">运行所有测试</button>
             <button class="btn" onclick="clearResults()">清除结果</button>
         </div>
         
         <div id="test-results"></div>
+        <div id="env-results"></div>
     </div>
 
     <div class="card">
@@ -315,9 +317,92 @@
             showResult('test-results', 'success', '所有测试执行完成，请查看各项测试结果');
         }
 
+        async function checkEnvironment() {
+            showResult('env-results', 'pending', '正在检查环境配置...');
+            
+            const checks = [];
+            
+            // 检查API可访问性
+            try {
+                const response = await fetch('/api/auth/me', {
+                    credentials: 'include'
+                });
+                checks.push({
+                    name: 'API 端点',
+                    status: response.status < 500 ? 'success' : 'error',
+                    message: `状态码: ${response.status}`
+                });
+            } catch (error) {
+                checks.push({
+                    name: 'API 端点',
+                    status: 'error',
+                    message: `连接失败: ${error.message}`
+                });
+            }
+            
+            // 检查静态资源
+            try {
+                const response = await fetch('/js/dashboard.js');
+                checks.push({
+                    name: '静态资源',
+                    status: response.ok ? 'success' : 'error',
+                    message: `dashboard.js 状态: ${response.status}`
+                });
+            } catch (error) {
+                checks.push({
+                    name: '静态资源',
+                    status: 'error',
+                    message: `加载失败: ${error.message}`
+                });
+            }
+            
+            // 检查默认管理员初始化
+            try {
+                const formData = new FormData();
+                formData.append('username', 'admin');
+                formData.append('password', 'admin123');
+                
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    body: formData,
+                    credentials: 'include'
+                });
+                
+                const result = await response.json();
+                checks.push({
+                    name: '管理员账号',
+                    status: result.success ? 'success' : 'warning',
+                    message: result.success ? '默认账号可用' : `登录失败: ${result.message || '未知错误'}`
+                });
+            } catch (error) {
+                checks.push({
+                    name: '管理员账号',
+                    status: 'error',
+                    message: `检查失败: ${error.message}`
+                });
+            }
+            
+            // 显示结果
+            let html = '<h3>🔍 环境检查结果</h3>';
+            checks.forEach(check => {
+                const statusClass = check.status === 'success' ? 'status-success' : 
+                                   check.status === 'error' ? 'status-error' : 'status-pending';
+                html += `
+                    <div style="margin: 10px 0; padding: 10px; border-left: 4px solid #e2e8f0;">
+                        <strong>${check.name}</strong>
+                        <span class="status ${statusClass}" style="margin-left: 10px;">${check.status.toUpperCase()}</span>
+                        <div style="margin-top: 5px; color: #666;">${check.message}</div>
+                    </div>
+                `;
+            });
+            
+            document.getElementById('env-results').innerHTML = html;
+        }
+
         function clearResults() {
             const resultContainers = [
                 'test-results',
+                'env-results',
                 'admin-login-result',
                 'invite-generation-result', 
                 'user-registration-result',

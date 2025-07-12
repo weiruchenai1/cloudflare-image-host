@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Page</title>
+</head>
+<body>
+    <h1>Debug Information</h1>
+    <p>If you can see this page, the redirect loop is fixed!</p>
+    
+    <div id="info">
+        <h2>Current Status:</h2>
+        <p>URL: <span id="current-url"></span></p>
+        <p>Time: <span id="current-time"></span></p>
+    </div>
+    
+    <div>
+        <h2>Navigation:</h2>
+        <a href="/">Go to Root</a> |
+        <a href="/login.html">Login Page</a> |
+        <a href="/dashboard.html">Dashboard</a> |
+        <a href="/test.html">Test Page</a>
+    </div>
+
+    <script>
+        document.getElementById('current-url').textContent = window.location.href;
+        document.getElementById('current-time').textContent = new Date().toLocaleString();
+        
+        console.log('Debug page loaded successfully');
+        console.log('URL:', window.location.href);
+        console.log('User Agent:', navigator.userAgent);
+    </script>
+</body>
+</html>

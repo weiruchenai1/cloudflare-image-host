@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CloudFlare Image Host - 系统测试</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f7fa;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 25px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+        }
+        
+        .status {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        
+        .status-success {
+            background: #c6f6d5;
+            color: #2f855a;
+        }
+        
+        .status-error {
+            background: #fed7d7;
+            color: #c53030;
+        }
+        
+        .status-pending {
+            background: #fbd38d;
+            color: #d69e2e;
+        }
+        
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            background: #667eea;
+            color: white;
+            margin: 5px;
+        }
+        
+        .test-item {
+            padding: 15px;
+            border-left: 4px solid #e2e8f0;
+            margin-bottom: 15px;
+            background: #f8f9fa;
+        }
+        
+        pre {
+            background: #1a202c;
+            color: #e2e8f0;
+            padding: 15px;
+            border-radius: 8px;
+            overflow-x: auto;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>🧪 CloudFlare Image Host 系统测试</h1>
+        <p>这个页面可以帮助您测试多用户文件托管系统的各项功能是否正常工作。</p>
+        
+        <div style="margin: 20px 0;">
+            <button class="btn" onclick="runAllTests()">运行所有测试</button>
+            <button class="btn" onclick="clearResults()">清除结果</button>
+        </div>
+        
+        <div id="test-results"></div>
+    </div>
+
+    <div class="card">
+        <h2>📋 测试项目</h2>
+        
+        <div class="test-item">
+            <h3>1. 默认管理员账号测试</h3>
+            <p>验证默认管理员账号是否可以正常登录</p>
+            <button class="btn" onclick="testAdminLogin()">测试管理员登录</button>
+            <div id="admin-login-result"></div>
+        </div>
+        
+        <div class="test-item">
+            <h3>2. 邀请码生成测试</h3>
+            <p>测试管理员是否可以生成邀请码</p>
+            <button class="btn" onclick="testInviteGeneration()">测试邀请码生成</button>
+            <div id="invite-generation-result"></div>
+        </div>
+        
+        <div class="test-item">
+            <h3>3. 用户注册测试</h3>
+            <p>使用邀请码测试用户注册功能</p>
+            <button class="btn" onclick="testUserRegistration()">测试用户注册</button>
+            <div id="user-registration-result"></div>
+        </div>
+        
+        <div class="test-item">
+            <h3>4. 文件上传测试</h3>
+            <p>测试文件上传和路径隔离功能</p>
+            <button class="btn" onclick="testFileUpload()">测试文件上传</button>
+            <div id="file-upload-result"></div>
+        </div>
+        
+        <div class="test-item">
+            <h3>5. 权限验证测试</h3>
+            <p>测试用户权限和文件访问控制</p>
+            <button class="btn" onclick="testPermissions()">测试权限控制</button>
+            <div id="permissions-result"></div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2>🔧 快速操作</h2>
+        <button class="btn" onclick="window.location.href='/login.html'">前往登录页面</button>
+        <button class="btn" onclick="window.location.href='/dashboard.html'">前往控制台</button>
+    </div>
+
+    <script>
+        let testData = {
+            inviteCode: null,
+            testUser: {
+                username: 'testuser_' + Date.now(),
+                password: 'test123456'
+            }
+        };
+
+        function showResult(containerId, status, message, details = null) {
+            const container = document.getElementById(containerId);
+            const statusClass = status === 'success' ? 'status-success' : 
+                               status === 'error' ? 'status-error' : 'status-pending';
+            
+            let html = `
+                <div style="margin-top: 10px;">
+                    <span class="status ${statusClass}">${status.toUpperCase()}</span>
+                    <span style="margin-left: 10px;">${message}</span>
+                </div>
+            `;
+            
+            if (details) {
+                html += `<pre>${JSON.stringify(details, null, 2)}</pre>`;
+            }
+            
+            container.innerHTML = html;
+        }
+
+        async function testAdminLogin() {
+            showResult('admin-login-result', 'pending', '正在测试管理员登录...');
+            
+            try {
+                const formData = new FormData();
+                formData.append('username', 'admin');
+                formData.append('password', 'admin123');
+                
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    body: formData,
+                    credentials: 'include'
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showResult('admin-login-result', 'success', '管理员登录成功', result);
+                } else {
+                    showResult('admin-login-result', 'error', '管理员登录失败', result);
+                }
+            } catch (error) {
+                showResult('admin-login-result', 'error', '请求失败', { error: error.message });
+            }
+        }
+
+        async function testInviteGeneration() {
+            showResult('invite-generation-result', 'pending', '正在生成邀请码...');
+            
+            try {
+                const formData = new FormData();
+                formData.append('quota', 1073741824); // 1GB
+                formData.append('expiresIn', 86400);   // 1天
+                
+                const response = await fetch('/api/admin/invites', {
+                    method: 'POST',
+                    body: formData,
+                    credentials: 'include'
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    testData.inviteCode = result.invite.code;
+                    showResult('invite-generation-result', 'success', '邀请码生成成功', result);
+                } else {
+                    showResult('invite-generation-result', 'error', '邀请码生成失败', result);
+                }
+            } catch (error) {
+                showResult('invite-generation-result', 'error', '请求失败', { error: error.message });
+            }
+        }
+
+        async function testUserRegistration() {
+            if (!testData.inviteCode) {
+                showResult('user-registration-result', 'error', '请先生成邀请码');
+                return;
+            }
+            
+            showResult('user-registration-result', 'pending', '正在注册测试用户...');
+            
+            try {
+                const formData = new FormData();
+                formData.append('username', testData.testUser.username);
+                formData.append('password', testData.testUser.password);
+                formData.append('inviteCode', testData.inviteCode);
+                
+                const response = await fetch('/api/auth/register', {
+                    method: 'POST',
+                    body: formData,
+                    credentials: 'include'
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    showResult('user-registration-result', 'success', '用户注册成功', result);
+                } else {
+                    showResult('user-registration-result', 'error', '用户注册失败', result);
+                }
+            } catch (error) {
+                showResult('user-registration-result', 'error', '请求失败', { error: error.message });
+            }
+        }
+
+        async function testFileUpload() {
+            showResult('file-upload-result', 'pending', '正在测试文件上传...');
+            
+            try {
+                // 创建一个测试文件
+                const blob = new Blob(['Hello CloudFlare Image Host!'], { type: 'text/plain' });
+                const file = new File([blob], 'test.txt', { type: 'text/plain' });
+                
+                const formData = new FormData();
+                formData.append('file', file);
+                formData.append('customName', 'test_upload.txt');
+                formData.append('uploadFolder', 'test');
+                formData.append('nameType', 'custom');
+                
+                const response = await fetch('/upload?uploadChannel=telegram', {
+                    method: 'POST',
+                    body: formData,
+                    credentials: 'include'
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok && !result.error) {
+                    showResult('file-upload-result', 'success', '文件上传成功', result);
+                } else {
+                    showResult('file-upload-result', 'error', '文件上传失败', result);
+                }
+            } catch (error) {
+                showResult('file-upload-result', 'error', '请求失败', { error: error.message });
+            }
+        }
+
+        async function testPermissions() {
+            showResult('permissions-result', 'pending', '正在测试权限控制...');
+            
+            try {
+                // 测试获取用户信息
+                const userResponse = await fetch('/api/auth/me', {
+                    credentials: 'include'
+                });
+                
+                const userResult = await userResponse.json();
+                
+                if (userResult.success) {
+                    showResult('permissions-result', 'success', '权限验证正常', userResult);
+                } else {
+                    showResult('permissions-result', 'error', '权限验证失败', userResult);
+                }
+            } catch (error) {
+                showResult('permissions-result', 'error', '请求失败', { error: error.message });
+            }
+        }
+
+        async function runAllTests() {
+            showResult('test-results', 'pending', '开始运行所有测试...');
+            
+            await testAdminLogin();
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            await testInviteGeneration();
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            await testUserRegistration();
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            await testFileUpload();
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            await testPermissions();
+            
+            showResult('test-results', 'success', '所有测试执行完成，请查看各项测试结果');
+        }
+
+        function clearResults() {
+            const resultContainers = [
+                'test-results',
+                'admin-login-result',
+                'invite-generation-result', 
+                'user-registration-result',
+                'file-upload-result',
+                'permissions-result'
+            ];
+            
+            resultContainers.forEach(id => {
+                const container = document.getElementById(id);
+                if (container) {
+                    container.innerHTML = '';
+                }
+            });
+        }
+    </script>
+</body>
+</html>

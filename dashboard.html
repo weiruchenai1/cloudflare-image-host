@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CloudFlare Image Host - 控制台</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f7fa;
+            color: #333;
+        }
+        
+        .header {
+            background: white;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+            padding: 0 20px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        
+        .header-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 60px;
+        }
+        
+        .logo {
+            font-size: 20px;
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .user-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+        
+        .btn {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            text-decoration: none;
+            display: inline-block;
+            transition: all 0.2s;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .btn-secondary {
+            background: #e2e8f0;
+            color: #4a5568;
+        }
+        
+        .btn:hover {
+            transform: translateY(-1px);
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 0 20px;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            padding: 25px;
+            margin-bottom: 20px;
+        }
+        
+        .card h2 {
+            margin-bottom: 20px;
+            color: #2d3748;
+        }
+        
+        .upload-area {
+            border: 2px dashed #cbd5e0;
+            border-radius: 12px;
+            padding: 40px;
+            text-align: center;
+            transition: all 0.3s;
+            cursor: pointer;
+        }
+        
+        .upload-area:hover {
+            border-color: #667eea;
+            background: #f8f9ff;
+        }
+        
+        .upload-area.dragover {
+            border-color: #667eea;
+            background: #f8f9ff;
+        }
+        
+        .upload-icon {
+            font-size: 48px;
+            color: #a0aec0;
+            margin-bottom: 15px;
+        }
+        
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        
+        .form-group {
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .form-group label {
+            margin-bottom: 5px;
+            font-weight: 500;
+            color: #4a5568;
+        }
+        
+        .form-group input,
+        .form-group select {
+            padding: 10px;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e2e8f0;
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 15px 0;
+            display: none;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            width: 0%;
+            transition: width 0.3s;
+        }
+        
+        .alert {
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin: 15px 0;
+            font-size: 14px;
+        }
+        
+        .alert-success {
+            background: #f0fff4;
+            color: #2f855a;
+            border: 1px solid #c6f6d5;
+        }
+        
+        .alert-error {
+            background: #fee;
+            color: #c53030;
+            border: 1px solid #fed7d7;
+        }
+        
+        .alert-warning {
+            background: #fffbeb;
+            color: #d69e2e;
+            border: 1px solid #fbd38d;
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        
+        .stat-card {
+            background: white;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 5px;
+        }
+        
+        .stat-label {
+            color: #718096;
+            font-size: 14px;
+        }
+        
+        .admin-panel {
+            display: none;
+        }
+        
+        .admin-panel.show {
+            display: block;
+        }
+        
+        .tab-buttons {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .tab-button {
+            padding: 10px 20px;
+            border: none;
+            background: #e2e8f0;
+            color: #4a5568;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .tab-button.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        
+        .table th,
+        .table td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        
+        .table th {
+            background: #f7fafc;
+            font-weight: 600;
+            color: #4a5568;
+        }
+        
+        .badge {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        
+        .badge-success {
+            background: #c6f6d5;
+            color: #2f855a;
+        }
+        
+        .badge-warning {
+            background: #fbd38d;
+            color: #d69e2e;
+        }
+        
+        .badge-error {
+            background: #fed7d7;
+            color: #c53030;
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <div class="header-content">
+            <div class="logo">CloudFlare Image Host</div>
+            <div class="user-info">
+                <div class="user-avatar" id="user-avatar"></div>
+                <span id="user-name">Loading...</span>
+                <button class="btn btn-secondary" onclick="logout()">退出登录</button>
+            </div>
+        </div>
+    </header>
+
+    <div class="container">
+        <!-- 用户统计 -->
+        <div class="stats">
+            <div class="stat-card">
+                <div class="stat-value" id="used-quota">0 MB</div>
+                <div class="stat-label">已用空间</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="total-quota">0 GB</div>
+                <div class="stat-label">总配额</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-value" id="file-count">0</div>
+                <div class="stat-label">文件数量</div>
+            </div>
+        </div>
+
+        <!-- 管理员面板 -->
+        <div id="admin-panel" class="card admin-panel">
+            <h2>🛠️ 管理员面板</h2>
+            <div class="tab-buttons">
+                <button class="tab-button active" onclick="switchAdminTab('users')">用户管理</button>
+                <button class="tab-button" onclick="switchAdminTab('invites')">邀请码管理</button>
+            </div>
+            
+            <div id="admin-users" class="tab-content active">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                    <h3>用户列表</h3>
+                    <button class="btn btn-primary" onclick="generateInvite()">生成邀请码</button>
+                </div>
+                <div id="users-table-container">
+                    <p>加载中...</p>
+                </div>
+            </div>
+            
+            <div id="admin-invites" class="tab-content">
+                <h3>邀请码列表</h3>
+                <div id="invites-table-container">
+                    <p>加载中...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 文件上传 -->
+        <div class="card">
+            <h2>📁 文件上传</h2>
+            
+            <div id="alert-container"></div>
+            
+            <div class="upload-area" id="upload-area" onclick="document.getElementById('file-input').click()">
+                <div class="upload-icon">📁</div>
+                <p>点击选择文件或拖拽文件到此处</p>
+                <p style="color: #718096; font-size: 14px; margin-top: 10px;">支持图片、文档、音频、视频等多种格式</p>
+            </div>
+            
+            <input type="file" id="file-input" style="display: none;" multiple>
+            
+            <div class="form-grid">
+                <div class="form-group">
+                    <label for="custom-name">自定义文件名（可选）</label>
+                    <input type="text" id="custom-name" placeholder="留空则使用原文件名">
+                </div>
+                <div class="form-group">
+                    <label for="folder-path">文件夹路径（可选）</label>
+                    <input type="text" id="folder-path" placeholder="例如: photos/2024">
+                </div>
+                <div class="form-group">
+                    <label for="name-type">命名方式</label>
+                    <select id="name-type">
+                        <option value="origin">保持原名</option>
+                        <option value="custom">自定义名称</option>
+                        <option value="index">时间戳命名</option>
+                        <option value="short">随机命名</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="upload-channel">存储渠道</label>
+                    <select id="upload-channel">
+                        <option value="telegram">Telegram</option>
+                        <option value="cfr2">Cloudflare R2</option>
+                        <option value="s3">S3兼容</option>
+                        <option value="external">外链</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="progress-bar" id="progress-bar">
+                <div class="progress-fill" id="progress-fill"></div>
+            </div>
+            
+            <button class="btn btn-primary" id="upload-btn" onclick="uploadFiles()" style="width: 100%; margin-top: 15px;">
+                开始上传
+            </button>
+        </div>
+    </div>
+
+    <script src="/js/dashboard.js"></script>
+</body>
+</html>

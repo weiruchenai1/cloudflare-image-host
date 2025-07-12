@@ -38,6 +38,11 @@ export async function onRequest(context) {
         return Response.redirect(new URL('/dashboard.html', request.url).href, 302);
     }
     
+    // 如果访问登录页面且已登录，重定向到dashboard
+    if (userResult.success && url.pathname === '/login.html') {
+        return Response.redirect(new URL('/dashboard.html', request.url).href, 302);
+    }
+    
     // 如果访问其他需要认证的路径且未登录，返回401
     if (!userResult.success) {
         if (url.pathname.startsWith('/api/')) {

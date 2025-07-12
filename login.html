@@ -290,7 +290,7 @@
                 if (result.success) {
                     showAlert('登录成功！正在跳转...', 'success');
                     setTimeout(() => {
-                        window.location.href = '/';
+                        window.location.href = '/dashboard.html';
                     }, 1000);
                 } else {
                     showAlert(result.message || '登录失败');
@@ -325,7 +325,7 @@
                 if (result.success) {
                     showAlert('注册成功！正在跳转...', 'success');
                     setTimeout(() => {
-                        window.location.href = '/';
+                        window.location.href = '/dashboard.html';
                     }, 1000);
                 } else {
                     showAlert(result.message || '注册失败');
@@ -338,27 +338,8 @@
             }
         });
 
-        // 检查是否已登录
-        async function checkAuth() {
-            try {
-                const response = await fetch('/api/auth/me', {
-                    credentials: 'include'
-                });
-                
-                if (response.ok) {
-                    const result = await response.json();
-                    if (result.success) {
-                        // 已登录，跳转到主页
-                        window.location.href = '/';
-                    }
-                }
-            } catch (error) {
-                // 未登录，继续显示登录页面
-            }
-        }
-
-        // 页面加载时检查登录状态
-        checkAuth();
+        // 注意：移除了自动检查登录状态的逻辑，避免重定向循环
+        // 现在由服务端中间件负责处理已登录用户的重定向
     </script>
 </body>
 </html>
